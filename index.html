@@ -115,6 +115,7 @@ canvas{display:block;width:100%;height:auto}
     <p class="status" id="homeMsg"></p>
   </section>
   <p class="note">操作：手機點畫面左右半邊、按下方按鈕或左右滑動；電腦用 ← → 或 A D。每場 3 條命，撞車扣一條，金幣加分。分數會自動上傳世界排行榜。</p>
+  <p class="note">隱私說明：為了統計與防止作弊，多人比賽會記錄連線地區（IP 只保留前三段）、裝置與瀏覽器資訊，以及該場成績，不會公開。</p>
 </main>
 
 <!-- 房間大廳 -->
@@ -310,7 +311,7 @@ canvas{display:block;width:100%;height:auto}
     if(s>best){best=s;try{localStorage.setItem(bestKey(),best)}catch(e){}}
     hud();state='over';submit(s,!mp);
     if(mp){
-      mp.me.done=true;mp.me.fin=finished;sendProg(true);
+      mp.me.done=true;mp.me.fin=finished;sendProg(true);logEnd(finished?'finished':'crashed');
       show({t:finished?'完賽！':'撞車了！',p:'總分 '+s+'，等待其他玩家完成…'});
       checkAllDone();
     }else{
@@ -445,6 +446,7 @@ canvas{display:block;width:100%;height:auto}
   }
   function leave(silent){
     if(!mp)return;
+    if(ses&&!ses.ended&&mp.phase==='race')logEnd('left');
     var m=mp;mp=null;clearInterval(m.timer);clearTimeout(m.retryTimer);clearRoom();
     try{m.ch.untrack();sb.removeChannel(m.ch)}catch(e){}
     state='ready';
@@ -470,6 +472,7 @@ canvas{display:block;width:100%;height:auto}
     if(mp.expected.indexOf(mp.id)<0)mp.expected.push(mp.id);
     $('mini').hidden=false;$('pause').hidden=true;setChip();loadBest();
     go('play');reset(p.seed);state='count';
+    logStart();
     var n=3;show({t:String(n),big:true});
     renderMp();
     clearInterval(mp.timer);
@@ -510,6 +513,7 @@ canvas{display:block;width:100%;height:auto}
     mp.phase='results';
     var list=ranking();
     for(var i=0;i<list.length;i++)if(list[i].id===mp.id)mp.rank=i+1;
+    logEnd(finished?'finished':'crashed',mp.rank,list.length);
     show({t:mp.rank===1?'冠軍！':'第 '+mp.rank+' 名',p:'共 '+list.length+' 人，你的總分 '+score()+(isHost()?'':'。等房主再開一場。'),
       list:rankHtml(list,false),btn:isHost()?'再來一場':'',act:startRaceMsg,alt:'回房間大廳',altAct:function(){go('lobby');renderMp()},board:true});
     renderMp();
@@ -538,6 +542,37 @@ canvas{display:block;width:100%;height:auto}
     mp.ch.send({type:'broadcast',event:'start',payload:{seed:Math.floor(Math.random()*2147483647)}});
   }
   function inviteLink(){return location.origin+location.pathname+'?room='+mp.code}
+
+  /* ---------- 多人場次紀錄（送到 Supabase Edge Function） ---------- */
+  var LOG_URL=SB_URL+'/functions/v1/log-session',ses=null;
+  function uuid(){
+    if(window.crypto&&crypto.randomUUID)return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0;return (c==='x'?r:(r&3|8)).toString(16)});
+  }
+  function pid(){
+    var v='';try{v=localStorage.getItem('rainbow-pid')||''}catch(e){}
+    if(!v){v=uuid();try{localStorage.setItem('rainbow-pid',v)}catch(e){}}
+    return v;
+  }
+  function postLog(body){
+    try{fetch(LOG_URL,{method:'POST',keepalive:true,headers:{'Content-Type':'application/json',apikey:KEY},body:JSON.stringify(body)}).catch(function(){})}catch(e){}
+  }
+  function logStart(){
+    var ref='';try{ref=document.referrer?new URL(document.referrer).hostname:''}catch(e){}
+    var info={sid:uuid(),event:'start',player_id:pid(),nickname:mp.name,mode:'multi',level:'循序漸進',room_code:mp.code,players_count:mp.expected.length,
+      screen:innerWidth+'x'+innerHeight,lang:navigator.language,tz:(Intl.DateTimeFormat().resolvedOptions().timeZone||''),referrer:ref,
+      dark_mode:matchMedia('(prefers-color-scheme:dark)').matches,touch:('ontouchstart' in window)||navigator.maxTouchPoints>0};
+    ses={sid:info.sid,t0:Date.now(),ended:false};
+    var send=function(){postLog(info)};
+    if(navigator.userAgentData&&navigator.userAgentData.getHighEntropyValues){
+      navigator.userAgentData.getHighEntropyValues(['model']).then(function(v){if(v&&v.model)info.device_model=v.model;send()},send);
+    }else send();
+  }
+  function logEnd(reason,rank,count){
+    if(!ses)return;
+    postLog({sid:ses.sid,event:'end',score:score(),distance:Math.floor(dist),coins:coins,duration_s:Math.round((Date.now()-ses.t0)/1000),end_reason:reason,rank:rank||undefined,players_count:count||undefined});
+    ses.ended=true;
+  }
 
   /* ---------- 事件 ---------- */
   $('go').onclick=function(){if(actGo)actGo()};
