@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>彩虹公路 管理後台</title>
+<style>
+/* 版面：登入／驗證碼畫面為置中窄卡片；登入後頂部工具列 + 分頁 + 內容，表格可橫向捲動 */
+:root{
+  color-scheme:light;
+  --bg:#eef1f5; --card:#ffffff; --fg:#18212d; --muted:#5d6b7c; --line:#d9dfe7;
+  --accent:#0b6e79; --accent-fg:#ffffff; --bad:#c2410c; --good:#17803d; --soft:#f5f7fa;
+  --font:system-ui,-apple-system,"PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f161e; --card:#17212c; --fg:#e6ecf3; --muted:#92a1b3; --line:#2b3a4a;
+  --accent:#4cc3cf; --accent-fg:#06262b; --bad:#f2a65a; --good:#5fd58a; --soft:#1d2936; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f161e; --card:#17212c; --fg:#e6ecf3; --muted:#92a1b3; --line:#2b3a4a;
+  --accent:#4cc3cf; --accent-fg:#06262b; --bad:#f2a65a; --good:#5fd58a; --soft:#1d2936; color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);font-size:14px;line-height:1.5;padding-inline:16px;padding-block:20px 40px}
+[hidden]{display:none!important}
+.wrap{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.narrow{max-width:400px;padding-top:6vh}
+h1{margin:0;font-size:1.3rem}
+h2{margin:0;font-size:1.05rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+label{font-size:.8rem;color:var(--muted)}
+input,textarea{font:inherit;color:inherit;background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-height:44px;width:100%}
+input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:8px;padding:8px 14px;min-height:40px;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.danger{color:var(--bad);border-color:var(--bad)}
+.btn.small{min-height:32px;padding:3px 10px;font-size:.85rem}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.status{margin:0;font-size:.85rem;color:var(--muted)}
+.status.err{color:var(--bad)}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:999px;padding:6px 14px;cursor:pointer;min-height:36px}
+.tab[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{background:var(--soft);border-radius:8px;padding:10px 12px}
+.stat b{display:block;font-size:1.5rem;font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:.8rem}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.row-b{display:grid;grid-template-columns:90px 1fr 36px;align-items:center;gap:8px;font-size:.85rem}
+.row-b .tr{height:8px;background:var(--soft);border-radius:4px;overflow:hidden}
+.row-b .tr i{display:block;height:100%;background:var(--accent)}
+.fb{border:1px solid var(--line);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--card)}
+.fb.done{opacity:.6}
+.fb .msg{white-space:pre-wrap;overflow-wrap:anywhere}
+.meta{color:var(--muted);font-size:.78rem;overflow-wrap:anywhere}
+.badge{display:inline-block;font-size:.72rem;font-weight:700;padding:1px 8px;border-radius:999px;background:var(--soft);border:1px solid var(--line)}
+.badge.bug{color:var(--bad)}.badge.idea{color:var(--accent)}
+.acts{display:flex;gap:6px;flex-wrap:wrap}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;min-width:900px;font-size:.82rem}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}
+th{background:var(--soft);color:var(--muted);font-weight:600;position:sticky;top:0}
+.qr{display:flex;flex-direction:column;align-items:center;gap:8px}
+.qr img{width:200px;height:200px;background:#fff;border-radius:8px;padding:6px}
+code{font-family:ui-monospace,Menlo,Consolas,monospace;background:var(--soft);padding:2px 6px;border-radius:4px;overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+
+<!-- 登入 -->
+<main class="wrap narrow" id="login" hidden>
+  <h1>管理後台</h1>
+  <form class="card" id="loginForm" autocomplete="on">
+    <label for="email">帳號（Email）</label>
+    <input id="email" type="email" autocomplete="username" required>
+    <label for="pass">密碼</label>
+    <input id="pass" type="password" autocomplete="current-password" required>
+    <button class="btn primary" id="loginBtn" type="submit">下一步：輸入驗證碼</button>
+    <p class="status" id="loginMsg">登入需要「帳號密碼」加上「驗證 App 的 6 位數驗證碼」。</p>
+  </form>
+</main>
+
+<!-- 驗證碼 -->
+<main class="wrap narrow" id="mfa" hidden>
+  <h1>雙重驗證</h1>
+  <div class="card">
+    <div id="enrollBox" hidden class="qr">
+      <p class="status">第一次登入：請用驗證 App（Google Authenticator、Microsoft Authenticator、Authy 等）掃描 QR Code，或手動輸入下方密鑰，再輸入 App 顯示的 6 位數驗證碼。</p>
+      <img id="qrImg" alt="驗證 App 的 QR Code">
+      <div>密鑰：<code id="secret"></code></div>
+    </div>
+    <p class="status" id="verifyHint" hidden>請輸入驗證 App 目前顯示的 6 位數驗證碼。</p>
+    <label for="code">驗證碼</label>
+    <input id="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" placeholder="000000">
+    <button class="btn primary" id="codeBtn" type="button">驗證並進入後台</button>
+    <button class="btn small" id="mfaOut" type="button">取消並登出</button>
+    <p class="status" id="mfaMsg"></p>
+  </div>
+</main>
+
+<!-- 無權限 -->
+<main class="wrap narrow" id="denied" hidden>
+  <h1>沒有管理權限</h1>
+  <div class="card">
+    <p>這個帳號已登入，但不在管理員名單內。請聯絡網站擁有者。</p>
+    <button class="btn" id="deniedOut" type="button">登出</button>
+  </div>
+</main>
+
+<!-- 後台 -->
+<main class="wrap" id="app" hidden>
+  <div class="bar">
+    <div><h1>彩虹公路 管理後台</h1><p class="status" id="who"></p></div>
+    <div class="acts"><button class="btn small" id="reload" type="button">重新整理</button><button class="btn small" id="logout" type="button">登出</button></div>
+  </div>
+  <div class="tabs" role="group" aria-label="分頁">
+    <button class="tab" data-p="overview" aria-pressed="true">概覽</button>
+    <button class="tab" data-p="feedback" aria-pressed="false">意見回報 <span id="fbCount"></span></button>
+    <button class="tab" data-p="sessions" aria-pressed="false">多人場次</button>
+    <button class="tab" data-p="scores" aria-pressed="false">排行榜管理</button>
+  </div>
+  <p class="status" id="appMsg"></p>
+
+  <section id="p-overview" class="wrap" style="gap:14px"></section>
+
+  <section id="p-feedback" class="wrap" hidden style="gap:10px">
+    <div class="acts">
+      <button class="btn small" id="fbAll" type="button">全部</button>
+      <button class="btn small" id="fbNew" type="button">只看未處理</button>
+    </div>
+    <div id="fbList" class="wrap" style="gap:10px"></div>
+  </section>
+
+  <section id="p-sessions" class="wrap" hidden style="gap:10px">
+    <div class="acts"><button class="btn small" id="csv" type="button">下載 CSV</button><span class="status" id="sesNote"></span></div>
+    <div class="scroll"><table id="sesTable"></table></div>
+  </section>
+
+  <section id="p-scores" class="two" hidden>
+    <div class="card"><h2>世界榜（前 50 筆）</h2><div class="scroll"><table id="worldTable" style="min-width:320px"></table></div></div>
+    <div class="card"><h2>今日挑戰（前 50 筆）</h2><div class="scroll"><table id="dailyTable" style="min-width:320px"></table></div></div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+(function(){
+  var URL_='https://vkpzblltqznkvgfnjcdp.supabase.co',KEY='sb_publishable_N6kWoe_b_ego0YqWMAPVtg_jNzcB96D';
+  var $=function(i){return document.getElementById(i)};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+  var sb=window.supabase.createClient(URL_,KEY,{auth:{storage:window.sessionStorage,storageKey:'rcg-admin',persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+  var factorId=null,data={fb:[],ses:[],world:[],daily:[]},fbOnly=false;
+
+  function view(n){['login','mfa','denied','app'].forEach(function(x){$(x).hidden=x!==n})}
+  function say(id,t,err){var e=$(id);e.textContent=t;e.className='status'+(err?' err':'')}
+  function when(t){return t?new Date(t).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false,month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):''}
+
+  /* ---------- 登入流程 ---------- */
+  async function route(){
+    var r=await sb.auth.getSession();
+    if(!r.data.session){view('login');return}
+    var a=await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+    if(a.data&&a.data.currentLevel==='aal2'){return enter(r.data.session)}
+    var f=await sb.auth.mfa.listFactors();
+    var all=(f.data&&f.data.all)||[],ver=all.filter(function(x){return x.factor_type==='totp'&&x.status==='verified'});
+    $('code').value='';say('mfaMsg','');
+    if(ver.length){
+      factorId=ver[0].id;$('enrollBox').hidden=true;$('verifyHint').hidden=false;view('mfa');$('code').focus();
+    }else{
+      for(var i=0;i<all.length;i++)if(all[i].status==='unverified')await sb.auth.mfa.unenroll({factorId:all[i].id});
+      var en=await sb.auth.mfa.enroll({factorType:'totp',friendlyName:'後台驗證 '+Date.now()});
+      if(en.error){view('mfa');say('mfaMsg','無法建立驗證碼：'+en.error.message,true);return}
+      factorId=en.data.id;$('qrImg').src=en.data.totp.qr_code;$('secret').textContent=en.data.totp.secret;
+      $('enrollBox').hidden=false;$('verifyHint').hidden=true;view('mfa');$('code').focus();
+    }
+  }
+  $('loginForm').addEventListener('submit',async function(e){
+    e.preventDefault();$('loginBtn').disabled=true;say('loginMsg','登入中…');
+    var r=await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('pass').value});
+    $('loginBtn').disabled=false;$('pass').value='';
+    if(r.error){say('loginMsg','帳號或密碼不正確，請再試一次。',true);return}
+    say('loginMsg','');route();
+  });
+  $('codeBtn').addEventListener('click',verify);
+  $('code').addEventListener('keydown',function(e){if(e.key==='Enter')verify()});
+  async function verify(){
+    var code=$('code').value.replace(/\s/g,'');
+    if(!/^\d{6}$/.test(code)){say('mfaMsg','請輸入 6 位數字。',true);return}
+    $('codeBtn').disabled=true;say('mfaMsg','驗證中…');
+    var ch=await sb.auth.mfa.challenge({factorId:factorId});
+    if(ch.error){$('codeBtn').disabled=false;say('mfaMsg','驗證失敗：'+ch.error.message,true);return}
+    var v=await sb.auth.mfa.verify({factorId:factorId,challengeId:ch.data.id,code:code});
+    $('codeBtn').disabled=false;
+    if(v.error){say('mfaMsg','驗證碼不正確或已過期，請輸入 App 上最新的 6 位數。',true);$('code').select();return}
+    route();
+  }
+  async function out(){await sb.auth.signOut();data={fb:[],ses:[],world:[],daily:[]};view('login')}
+  $('mfaOut').onclick=out;$('deniedOut').onclick=out;$('logout').onclick=out;
+
+  async function enter(session){
+    var ok=await sb.rpc('is_admin');
+    if(ok.error||ok.data!==true){view('denied');return}
+    $('who').textContent='已登入：'+(session.user.email||'');
+    view('app');load();
+  }
+
+  /* ---------- 載入資料 ---------- */
+  async function load(){
+    say('appMsg','載入中…');
+    var rs=await Promise.all([
+      sb.from('feedback').select('*').order('created_at',{ascending:false}).limit(500),
+      sb.from('game_sessions').select('*').order('created_at',{ascending:false}).limit(1000),
+      sb.from('car_scores').select('id,name,score,created_at').order('score',{ascending:false}).limit(50),
+      sb.from('daily_scores').select('id,day,name,score,created_at').order('day',{ascending:false}).order('score',{ascending:false}).limit(50)
+    ]);
+    var err=rs.filter(function(r){return r.error})[0];
+    if(err){say('appMsg','讀取失敗：'+err.error.message+'（若剛登入，請重新整理或重新登入）',true);return}
+    data.fb=rs[0].data;data.ses=rs[1].data;data.world=rs[2].data;data.daily=rs[3].data;
+    say('appMsg','資料更新於 '+new Date().toLocaleTimeString('zh-TW',{hour12:false}));
+    renderAll();
+  }
+  $('reload').onclick=load;
+
+  /* ---------- 分頁 ---------- */
+  document.querySelectorAll('.tab').forEach(function(b){
+    b.onclick=function(){
+      document.querySelectorAll('.tab').forEach(function(x){x.setAttribute('aria-pressed',x===b)});
+      ['overview','feedback','sessions','scores'].forEach(function(p){$('p-'+p).hidden=p!==b.dataset.p});
+    };
+  });
+
+  /* ---------- 渲染 ---------- */
+  function count(rows,key){var m={};rows.forEach(function(r){var k=r[key]||'未知';m[k]=(m[k]||0)+1});return Object.keys(m).map(function(k){return[k,m[k]]}).sort(function(a,b){return b[1]-a[1]})}
+  function bars(title,list){
+    var max=list.length?list[0][1]:1;
+    return '<div class="card"><h2>'+esc(title)+'</h2>'+(list.slice(0,8).map(function(x){
+      return '<div class="row-b"><span>'+esc(x[0])+'</span><div class="tr"><i style="width:'+Math.round(x[1]/max*100)+'%"></i></div><b>'+x[1]+'</b></div>'}).join('')||'<p class="status">還沒有資料</p>')+'</div>';
+  }
+  function renderOverview(){
+    var ses=data.ses,now=Date.now(),wk=ses.filter(function(r){return now-new Date(r.created_at)<7*864e5});
+    var players={};ses.forEach(function(r){if(r.player_id)players[r.player_id]=1});
+    var done=ses.filter(function(r){return r.duration_s});
+    var avg=done.length?Math.round(done.reduce(function(a,r){return a+r.duration_s},0)/done.length):0;
+    var days={};ses.forEach(function(r){var d=new Date(r.created_at).toLocaleDateString('sv-SE',{timeZone:'Asia/Taipei'});days[d]=(days[d]||0)+1});
+    var dayList=Object.keys(days).sort().reverse().slice(0,7).map(function(d){return[d,days[d]]});
+    $('p-overview').innerHTML=
+      '<div class="grid">'+
+      '<div class="stat"><b>'+data.fb.filter(function(f){return !f.handled}).length+'</b><span>未處理回報</span></div>'+
+      '<div class="stat"><b>'+ses.length+'</b><span>多人場次（最近 1000 筆）</span></div>'+
+      '<div class="stat"><b>'+wk.length+'</b><span>近 7 天場次</span></div>'+
+      '<div class="stat"><b>'+Object.keys(players).length+'</b><span>不重複裝置</span></div>'+
+      '<div class="stat"><b>'+avg+' 秒</b><span>平均每場時間</span></div></div>'+
+      '<div class="two">'+bars('每日場次（台灣時間）',dayList)+bars('裝置類型',count(ses,'device_type'))+bars('作業系統',count(ses,'os'))+bars('瀏覽器',count(ses,'browser'))+bars('時區',count(ses,'tz'))+bars('來源網站',count(ses.filter(function(r){return r.referrer}),'referrer'))+'</div>';
+  }
+  function renderFeedback(){
+    var list=data.fb.filter(function(f){return !fbOnly||!f.handled});
+    $('fbCount').textContent=data.fb.filter(function(f){return !f.handled}).length?'('+data.fb.filter(function(f){return !f.handled}).length+')':'';
+    var T={bug:'遇到問題',idea:'建議',other:'其他'};
+    $('fbList').innerHTML=list.map(function(f){
+      return '<article class="fb'+(f.handled?' done':'')+'" data-id="'+esc(f.id)+'">'+
+        '<div class="bar"><span><span class="badge '+esc(f.type)+'">'+esc(T[f.type]||f.type)+'</span> '+(f.handled?'<span class="badge">已處理</span>':'')+'</span><span class="meta">'+when(f.created_at)+'</span></div>'+
+        '<div class="msg">'+esc(f.message)+'</div>'+
+        (f.contact?'<div>聯絡：<code>'+esc(f.contact)+'</code></div>':'')+
+        '<div class="meta">暱稱 '+esc(f.nickname||'—')+'｜版本 '+esc(f.app_ver||'—')+'｜螢幕 '+esc(f.screen||'—')+'｜語言 '+esc(f.lang||'—')+'｜IP '+esc(f.ip_masked||'—')+'<br>'+esc(f.ua||'')+'</div>'+
+        '<div class="acts"><button class="btn small" data-act="toggle">'+(f.handled?'改回未處理':'標為已處理')+'</button><button class="btn small danger" data-act="del">刪除</button></div></article>'}).join('')||'<p class="status">沒有符合的回報。</p>';
+  }
+  var COLS=[['created_at','時間'],['nickname','暱稱'],['room_code','房號'],['level','難度'],['players_count','人數'],['score','分數'],['distance','距離'],['coins','金幣'],['duration_s','秒數'],['end_reason','結束'],['rank','名次'],['ip_masked','IP'],['country','國家'],['device_type','裝置'],['os','系統'],['browser','瀏覽器'],['browser_version','版本'],['device_model','型號'],['screen','螢幕'],['tz','時區'],['referrer','來源']];
+  function renderSessions(){
+    $('sesNote').textContent='顯示最近 '+data.ses.length+' 筆';
+    $('sesTable').innerHTML='<thead><tr>'+COLS.map(function(c){return'<th>'+c[1]+'</th>'}).join('')+'</tr></thead><tbody>'+
+      data.ses.slice(0,300).map(function(r){return'<tr>'+COLS.map(function(c){return'<td>'+esc(c[0]==='created_at'?when(r[c[0]]):r[c[0]])+'</td>'}).join('')+'</tr>'}).join('')+'</tbody>';
+  }
+  function scoreTable(el,rows,kind){
+    $(el).innerHTML='<thead><tr>'+(kind==='daily'?'<th>日期</th>':'')+'<th>暱稱</th><th>分數</th><th>時間</th><th></th></tr></thead><tbody>'+
+      rows.map(function(r){return'<tr>'+(kind==='daily'?'<td>'+esc(r.day)+'</td>':'')+'<td>'+esc(r.name)+'</td><td>'+r.score+'</td><td>'+when(r.created_at)+'</td><td><button class="btn small danger" data-k="'+kind+'" data-id="'+r.id+'">刪除</button></td></tr>'}).join('')+'</tbody>';
+  }
+  function renderAll(){renderOverview();renderFeedback();renderSessions();scoreTable('worldTable',data.world,'world');scoreTable('dailyTable',data.daily,'daily')}
+
+  /* ---------- 操作：兩段式確認，避免誤刪 ---------- */
+  function armed(btn){
+    if(btn.dataset.armed){return true}
+    btn.dataset.armed='1';var t=btn.textContent;btn.textContent='再按一次確認刪除';
+    setTimeout(function(){delete btn.dataset.armed;btn.textContent=t},3000);return false;
+  }
+  $('fbList').addEventListener('click',async function(e){
+    var b=e.target.closest('button[data-act]');if(!b)return;
+    var id=b.closest('.fb').dataset.id,f=data.fb.filter(function(x){return x.id===id})[0];if(!f)return;
+    if(b.dataset.act==='toggle'){
+      var r=await sb.from('feedback').update({handled:!f.handled}).eq('id',id);
+      if(r.error){say('appMsg','更新失敗：'+r.error.message,true);return}
+      f.handled=!f.handled;renderFeedback();renderOverview();
+    }else if(b.dataset.act==='del'){
+      if(!armed(b))return;
+      var d=await sb.from('feedback').delete().eq('id',id);
+      if(d.error){say('appMsg','刪除失敗：'+d.error.message,true);return}
+      data.fb=data.fb.filter(function(x){return x.id!==id});renderFeedback();renderOverview();
+    }
+  });
+  $('fbAll').onclick=function(){fbOnly=false;renderFeedback()};
+  $('fbNew').onclick=function(){fbOnly=true;renderFeedback()};
+  $('p-scores').addEventListener('click',async function(e){
+    var b=e.target.closest('button[data-id]');if(!b)return;
+    if(!armed(b))return;
+    var tbl=b.dataset.k==='daily'?'daily_scores':'car_scores';
+    var d=await sb.from(tbl).delete().eq('id',b.dataset.id);
+    if(d.error){say('appMsg','刪除失敗：'+d.error.message,true);return}
+    var key=b.dataset.k==='daily'?'daily':'world';
+    data[key]=data[key].filter(function(x){return String(x.id)!==b.dataset.id});
+    scoreTable(key==='daily'?'dailyTable':'worldTable',data[key],key);
+  });
+  $('csv').onclick=function(){
+    var q=function(v){return '"'+String(v==null?'':v).replace(/"/g,'""')+'"'};
+    var lines=[COLS.map(function(c){return q(c[1])}).join(',')].concat(data.ses.map(function(r){return COLS.map(function(c){return q(r[c[0]])}).join(',')}));
+    var blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
+    var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='sessions.csv';document.body.appendChild(a);a.click();a.remove();
+  };
+
+  sb.auth.onAuthStateChange(function(ev){if(ev==='SIGNED_OUT')view('login')});
+  route();
+})();
+</script>
+</body>
+</html>
