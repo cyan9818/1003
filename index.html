@@ -67,7 +67,8 @@ canvas{display:block;width:100%;height:auto}
 .chip small{color:var(--muted);font-weight:400;margin-right:3px}
 .hud .sp{flex:1}
 .ibtn{font:inherit;border:0;border-radius:10px;background:var(--hud);color:var(--fg);width:36px;height:30px;cursor:pointer;font-weight:700}
-.mini{position:absolute;top:42px;left:6px;right:6px;display:flex;gap:5px;overflow:hidden;pointer-events:none}
+.hud2{position:absolute;top:42px;left:6px;right:6px;display:flex;gap:5px;pointer-events:none}
+.mini{position:absolute;top:76px;left:6px;right:6px;display:flex;gap:5px;overflow:hidden;pointer-events:none}
 .mini span{font-size:.72rem;font-weight:700;white-space:nowrap;background:var(--hud);border-radius:999px;padding:2px 8px;color:var(--fg)}
 .mini span.me{outline:2px solid var(--accent)}
 .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:20px;background:color-mix(in srgb,var(--bg) 84%,transparent);overflow:auto}
@@ -80,6 +81,7 @@ canvas{display:block;width:100%;height:auto}
 .lv b{display:block;font-size:.85rem}.lv small{font-size:.7rem;color:var(--muted)}.lv span{font-size:1.3rem}
 .lv[aria-pressed="true"]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--card))}
 .lv:focus-visible{outline:3px solid var(--coin);outline-offset:2px}
+.toast{position:absolute;top:112px;left:50%;transform:translateX(-50%);background:var(--hud);color:var(--fg);padding:4px 14px;border-radius:999px;font-weight:700;font-size:.9rem;pointer-events:none;white-space:nowrap}
 .pad{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .pad .btn{font-size:1.5rem;padding:10px;min-height:60px}
 #home .top h1{font-size:1.25rem}
@@ -96,6 +98,7 @@ canvas{display:block;width:100%;height:auto}
     <h1>彩虹公路小賽車</h1>
     <div class="row">
       <button class="btn small" id="openBoard" type="button">🏆 排行榜</button>
+      <button class="btn small" id="snd1" type="button" aria-label="開關音效">🔊</button>
       <button class="btn small" id="theme1" type="button" aria-label="切換深色或淺色模式">🌓</button>
     </div>
   </div>
@@ -114,7 +117,7 @@ canvas{display:block;width:100%;height:auto}
     <button class="btn" id="solo" type="button">個人遊玩</button>
     <p class="status" id="homeMsg"></p>
   </section>
-  <p class="note">操作：手機點畫面左右半邊、按下方按鈕或左右滑動；電腦用 ← → 或 A D。每場 3 條命，撞車扣一條，金幣加分。分數會自動上傳世界排行榜。</p>
+  <p class="note">操作：手機點畫面左右半邊、按下方按鈕或左右滑動；電腦用 ← → 或 A D。每場 3 條命，撞車扣一條，金幣加分。路上的 🛡 護盾（擋一次撞擊）、🧲 磁鐵（吸金幣）、⚡ 衝刺（加速並撞開障礙）會短暫強化你。分數會自動上傳世界排行榜。</p>
   <p class="note">隱私說明：為了統計與防止作弊，多人比賽會記錄連線地區（IP 只保留前三段）、裝置與瀏覽器資訊，以及該場成績，不會公開。</p>
 </main>
 
@@ -145,12 +148,13 @@ canvas{display:block;width:100%;height:auto}
       <span class="chip"><small>距離</small><span id="dist">0 m</span></span>
       <span class="chip"><small>金幣</small><span id="coins">0</span></span>
       <span class="chip" id="lives">♥♥♥</span>
-      <span class="chip" id="lvChip" hidden></span>
       <span class="sp"></span>
       <button class="ibtn" id="pause" type="button" aria-label="暫停">⏸</button>
-      <button class="ibtn" id="theme3" type="button" aria-label="切換深色或淺色模式">🌓</button>
+      <button class="ibtn" id="snd3" type="button" aria-label="開關音效">🔊</button>
     </div>
+    <div class="hud2"><span class="chip" id="lvChip" hidden></span><span class="chip" id="pwChip" hidden></span></div>
     <div class="mini" id="mini" hidden></div>
+    <div class="toast" id="toast" hidden></div>
     <div class="overlay" id="ov">
       <h2 id="ovT"></h2>
       <p id="ovP"></p>
@@ -212,6 +216,53 @@ canvas{display:block;width:100%;height:auto}
   function laneX(l){return LW*l+LW/2}
   function score(){return Math.round((Math.floor(dist/10)+coins*20)*cur().x)}
   function hud(){$('dist').textContent=Math.floor(dist)+' m';$('coins').textContent=coins;$('lives').textContent='♥'.repeat(Math.max(0,lives))+'♡'.repeat(3-Math.max(0,lives))}
+
+  /* ---------- 音效與震動 ---------- */
+  var AC=null,muted=false;
+  try{muted=localStorage.getItem('rainbow-mute')==='1'}catch(e){}
+  function ac(){
+    if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}
+    if(AC&&AC.state==='suspended'&&AC.resume)AC.resume();
+    return AC;
+  }
+  function tone(f0,f1,d,type,vol,delay){
+    var a=ac();if(!a)return;
+    var t=a.currentTime+(delay||0),o=a.createOscillator(),g=a.createGain();
+    o.type=type||'square';o.frequency.setValueAtTime(f0,t);
+    if(f1)o.frequency.exponentialRampToValueAtTime(f1,t+d);
+    g.gain.setValueAtTime(vol||.08,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);
+    o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+d+.02);
+  }
+  function sfx(n){
+    if(muted)return;
+    switch(n){
+      case 'coin':tone(880,1320,.09,'square',.06);break;
+      case 'power':tone(520,520,.08,'triangle',.1);tone(660,660,.08,'triangle',.1,.08);tone(880,880,.14,'triangle',.1,.16);break;
+      case 'hit':tone(180,50,.3,'sawtooth',.14);break;
+      case 'shield':tone(700,200,.22,'triangle',.12);break;
+      case 'smash':tone(300,90,.15,'square',.08);break;
+      case 'dash':tone(200,900,.4,'sawtooth',.07);break;
+      case 'tick':tone(660,660,.1,'sine',.12);break;
+      case 'go':tone(990,990,.28,'sine',.14);break;
+      case 'win':tone(523,523,.12,'triangle',.1);tone(659,659,.12,'triangle',.1,.12);tone(784,784,.12,'triangle',.1,.24);tone(1047,1047,.3,'triangle',.1,.36);break;
+      case 'over':tone(400,120,.5,'sawtooth',.1);break;
+    }
+  }
+  function vib(ms){if(!muted&&navigator.vibrate)try{navigator.vibrate(ms)}catch(e){}}
+  function setMute(m){
+    muted=m;try{localStorage.setItem('rainbow-mute',m?'1':'0')}catch(e){}
+    ['snd1','snd3'].forEach(function(i){var b=document.getElementById(i);if(b)b.textContent=m?'🔇':'🔊'});
+  }
+  document.addEventListener('pointerdown',function(){if(!muted)ac()});
+
+  /* ---------- 道具 ---------- */
+  var PW=[{k:'shield',e:'🛡',n:'護盾',d:12,c:'#38bdf8'},{k:'magnet',e:'🧲',n:'磁鐵',d:8,c:'#f43f5e'},{k:'dash',e:'⚡',n:'衝刺',d:2.5,c:'#facc15'}];
+  var pw={shield:0,magnet:0,dash:0},toastT=0;
+  function toast(t){var e=$('toast');e.textContent=t;e.hidden=false;clearTimeout(toastT);toastT=setTimeout(function(){e.hidden=true},1300)}
+  function pwChip(){
+    var t=PW.filter(function(p){return pw[p.k]>0}).map(function(p){return p.e+Math.ceil(pw[p.k])}).join(' ');
+    var c=$('pwChip');c.hidden=!t;c.textContent=t;
+  }
 
   /* ---------- 畫面切換 ---------- */
   function go(name){
@@ -292,7 +343,7 @@ canvas{display:block;width:100%;height:auto}
   function setChip(){var c=$('lvChip');c.hidden=!!mp;c.textContent=LEVELS[lv].e+' '+LEVELS[lv].n}
   function reset(seed){
     rnd=seed==null?Math.random:mulberry(seed);
-    lane=1;px=laneX(1);speed=cur().b;dist=0;wd=0;nextAt=300;coins=0;lives=3;inv=0;items=[];finished=false;hud();
+    pw.shield=pw.magnet=pw.dash=0;pwChip();lane=1;px=laneX(1);speed=cur().b;dist=0;wd=0;nextAt=300;coins=0;lives=3;inv=0;items=[];finished=false;hud();
   }
   function toHome(){
     if(mp)leave(true);
@@ -303,13 +354,13 @@ canvas{display:block;width:100%;height:auto}
     go('play');
     $('mini').hidden=true;$('pause').hidden=false;
     reset();state='ready';loadBest();setChip();
-    show({t:'選擇難度',p:'難度越高，分數加成越多。',lv:true,btn:'開始',act:startSolo,alt:'回首頁',altAct:toHome});
+    show({t:'選擇難度',p:'難度越高，分數加成越多。吃到 🛡🧲⚡ 道具有短暫強化。',lv:true,btn:'開始',act:startSolo,alt:'回首頁',altAct:toHome});
   }
   function startSolo(){loadBest();setChip();reset();state='play';$('ov').hidden=true;last=performance.now()}
   function endRun(){
     var s=score();
     if(s>best){best=s;try{localStorage.setItem(bestKey(),best)}catch(e){}}
-    hud();state='over';submit(s,!mp);
+    hud();state='over';sfx(finished?'win':'over');submit(s,!mp);
     if(mp){
       mp.me.done=true;mp.me.fin=finished;sendProg(true);logEnd(finished?'finished':'crashed');
       show({t:finished?'完賽！':'撞車了！',p:'總分 '+s+'，等待其他玩家完成…'});
@@ -326,24 +377,37 @@ canvas{display:block;width:100%;height:auto}
   function move(d){if(state!=='play')return;lane=Math.max(0,Math.min(LANES-1,lane+d))}
 
   function addItem(){
-    var l=Math.floor(rnd()*LANES),r=rnd(),t=r<.4?'coin':(r<.75?'car':'cone');
+    var l=Math.floor(rnd()*LANES),r=rnd(),t=r<.38?'coin':(r<.7?'car':(r<.9?'cone':'pw'));
     var c=carColors[Math.floor(rnd()*carColors.length)],extra=rnd()<.5;
-    items.push({t:t,l:l,y:-60,c:c,v:t==='car'?.45:0});
+    items.push({t:t,l:l,y:-60,c:c,v:t==='car'?.45:0,k:t==='pw'?Math.floor(rnd()*3):0});
     if(t==='coin'&&extra){items.push({t:'coin',l:l,y:-120,c:0,v:0});items.push({t:'coin',l:l,y:-180,c:0,v:0})}
   }
   function update(dt){
     var L=cur();speed=Math.min(L.m,L.b+(Math.floor(dist/500)*35+dist*.02)*L.g);
+    if(pw.dash>0)speed*=1.6;
     dist+=speed*dt/10; wd+=speed*dt; scroll=(scroll+speed*dt)%80;
     px+=(laneX(lane)-px)*Math.min(1,dt*14);
     if(wd>=nextAt){addItem();nextAt=wd+Math.max(.35,.9-speed/900)*speed*L.gap*(.8+rnd()*.5)}
     if(inv>0)inv-=dt; if(shake>0)shake-=dt;
+    var hadPw=pw.shield>0||pw.magnet>0||pw.dash>0;
+    pw.shield=Math.max(0,pw.shield-dt);pw.magnet=Math.max(0,pw.magnet-dt);pw.dash=Math.max(0,pw.dash-dt);
+    if(hadPw)pwChip();
     var py=H-110;
     items.forEach(function(it){
       it.y+=(speed*(1-it.v))*dt;
       if(it.dead)return;
-      if(Math.abs(laneX(it.l)-px)<34&&Math.abs(it.y-py)<(it.t==='coin'?34:46)){
-        if(it.t==='coin'){coins++;it.dead=true}
-        else if(inv<=0){lives--;inv=1.4;shake=.3;it.dead=true}
+      if(it.t==='coin'&&pw.magnet>0){
+        var cx=it.x!==undefined?it.x:laneX(it.l),dx=px-cx,dy=py-it.y,dd=Math.sqrt(dx*dx+dy*dy);
+        if(dd<190&&dd>1){var k=Math.min(1,dt*9);it.x=cx+dx*k;it.y+=dy*k}
+      }
+      var ix=it.x!==undefined?it.x:laneX(it.l);
+      if(Math.abs(ix-px)<34&&Math.abs(it.y-py)<(it.t==='coin'||it.t==='pw'?34:46)){
+        if(it.t==='coin'){coins++;it.dead=true;sfx('coin')}
+        else if(it.t==='pw'){
+          var P=PW[it.k];pw[P.k]=P.d;it.dead=true;pwChip();toast(P.e+' '+P.n+'！');sfx(P.k==='dash'?'dash':'power');vib(20);
+        }else if(pw.dash>0){it.dead=true;sfx('smash')}
+        else if(pw.shield>0){pw.shield=0;pwChip();it.dead=true;inv=.8;shake=.15;sfx('shield');vib(25);toast('🛡 護盾擋下撞擊')}
+        else if(inv<=0){lives--;inv=1.4;shake=.3;it.dead=true;sfx('hit');vib(80)}
       }
     });
     items=items.filter(function(it){return !it.dead&&it.y<H+80});
@@ -367,11 +431,16 @@ canvas{display:block;width:100%;height:auto}
     ctx.fillStyle=tok('--lane');
     for(var i=1;i<LANES;i++)for(var y=-80;y<H;y+=80)ctx.fillRect(LW*i-3,y+scroll,6,40);
     items.forEach(function(it){
-      var x=laneX(it.l);
+      var x=it.x!==undefined?it.x:laneX(it.l);
       if(it.t==='coin'){
         ctx.fillStyle=tok('--coin');ctx.beginPath();ctx.arc(x,it.y,15,0,7);ctx.fill();
         ctx.strokeStyle='#b8860b';ctx.lineWidth=3;ctx.stroke();
         ctx.fillStyle='#b8860b';ctx.font='bold 16px sans-serif';ctx.textAlign='center';ctx.fillText('$',x,it.y+6);
+      }else if(it.t==='pw'){
+        var P=PW[it.k];
+        ctx.fillStyle=P.c;ctx.beginPath();ctx.arc(x,it.y,20,0,7);ctx.fill();
+        ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();
+        ctx.font='20px sans-serif';ctx.textAlign='center';ctx.fillStyle='#fff';ctx.fillText(P.e,x,it.y+7);
       }else if(it.t==='cone'){
         ctx.fillStyle='#ff7a1a';ctx.beginPath();ctx.moveTo(x,it.y-28);ctx.lineTo(x+22,it.y+22);ctx.lineTo(x-22,it.y+22);ctx.fill();
         ctx.fillStyle='#fff';ctx.fillRect(x-12,it.y,24,8);
@@ -381,7 +450,11 @@ canvas{display:block;width:100%;height:auto}
       ctx.fillStyle='#fff';ctx.fillRect(6,70,W-12,10);ctx.fillStyle='#17324a';
       for(var k=0;k<12;k++)if(k%2)ctx.fillRect(6+k*(W-12)/12,70,(W-12)/12,10);
     }
-    if(inv<=0||Math.floor(inv*12)%2===0)car(px,H-110,tok('--accent'),false);
+    var py2=H-110;
+    if(pw.dash>0){ctx.fillStyle='rgba(250,204,21,.85)';ctx.beginPath();ctx.moveTo(px-18,py2+44);ctx.lineTo(px,py2+44+40+Math.random()*16);ctx.lineTo(px+18,py2+44);ctx.fill()}
+    if(pw.magnet>0){ctx.strokeStyle='rgba(244,63,94,.55)';ctx.lineWidth=3;ctx.setLineDash([8,8]);ctx.beginPath();ctx.arc(px,py2,90,0,7);ctx.stroke();ctx.setLineDash([])}
+    if(inv<=0||Math.floor(inv*12)%2===0)car(px,py2,tok('--accent'),false);
+    if(pw.shield>0){ctx.strokeStyle='rgba(56,189,248,.9)';ctx.fillStyle='rgba(56,189,248,.18)';ctx.lineWidth=4;ctx.beginPath();ctx.arc(px,py2,62,0,7);ctx.fill();ctx.stroke()}
     ctx.restore();
   }
   function loop(t){
@@ -473,14 +546,14 @@ canvas{display:block;width:100%;height:auto}
     $('mini').hidden=false;$('pause').hidden=true;setChip();loadBest();
     go('play');reset(p.seed);state='count';
     logStart();
-    var n=3;show({t:String(n),big:true});
+    var n=3;show({t:String(n),big:true});sfx('tick');
     renderMp();
     clearInterval(mp.timer);
     var m=mp;
     m.timer=setInterval(function(){
       n--;
-      if(n>0){$('ovT').textContent=n}
-      else{clearInterval(m.timer);$('ovT').textContent='出發！';
+      if(n>0){$('ovT').textContent=n;sfx('tick')}
+      else{clearInterval(m.timer);$('ovT').textContent='出發！';sfx('go');
         setTimeout(function(){if(mp===m&&state==='count'){state='play';$('ov').hidden=true;last=performance.now();m.lastSend=0}},350)}
     },1000);
   }
@@ -605,7 +678,9 @@ canvas{display:block;width:100%;height:auto}
     var r=document.documentElement,dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme:dark)').matches;
     r.dataset.theme=dark?'light':'dark';
   }
-  ['theme1','theme2','theme3'].forEach(function(i){$(i).onclick=theme});
+  ['theme1','theme2'].forEach(function(i){$(i).onclick=theme});
+  ['snd1','snd3'].forEach(function(i){$(i).onclick=function(){setMute(!muted);if(!muted)sfx('coin')}});
+  setMute(muted);
   $('nick').addEventListener('change',function(){ensureNick();board()});
   $('dice').onclick=function(){$('nick').value=randNick();saveNick();board()};
   $('create').onclick=function(){connect(genCode(),true)};
