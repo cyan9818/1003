@@ -82,6 +82,9 @@ canvas{display:block;width:100%;height:auto}
 .lv:focus-visible{outline:3px solid var(--coin);outline-offset:2px}
 .pad{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .pad .btn{font-size:1.5rem;padding:10px;min-height:60px}
+#home .top h1{font-size:1.25rem}
+.modal{position:fixed;inset:0;z-index:10;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:16px}
+.sheet{background:var(--card);color:var(--fg);border-radius:18px;padding:16px;width:100%;max-width:420px;max-height:calc(100dvh - 32px);overflow:auto;display:flex;flex-direction:column;gap:12px;box-shadow:0 10px 40px rgba(0,0,0,.4)}
 @media (prefers-reduced-motion:reduce){.btn{transition:none}}
 </style>
 </head>
@@ -91,7 +94,10 @@ canvas{display:block;width:100%;height:auto}
 <main class="screen" id="home">
   <div class="top">
     <h1>彩虹公路小賽車</h1>
-    <button class="btn small" id="theme1" type="button" aria-label="切換深色或淺色模式">🌓</button>
+    <div class="row">
+      <button class="btn small" id="openBoard" type="button">🏆 排行榜</button>
+      <button class="btn small" id="theme1" type="button" aria-label="切換深色或淺色模式">🌓</button>
+    </div>
   </div>
   <section class="card">
     <div id="invite" class="invite" hidden></div>
@@ -107,11 +113,6 @@ canvas{display:block;width:100%;height:auto}
     </div>
     <button class="btn" id="solo" type="button">個人遊玩</button>
     <p class="status" id="homeMsg"></p>
-  </section>
-  <section class="card">
-    <h2>世界排行榜</h2>
-    <p class="status" id="status">連線中…</p>
-    <ol id="board"></ol>
   </section>
   <p class="note">操作：手機點畫面左右半邊、按下方按鈕或左右滑動；電腦用 ← → 或 A D。每場 3 條命，撞車扣一條，金幣加分。分數會自動上傳世界排行榜。</p>
 </main>
@@ -163,6 +164,15 @@ canvas{display:block;width:100%;height:auto}
     <button class="btn" id="R" type="button" aria-label="向右換道">▶</button>
   </div>
 </main>
+
+<div class="modal" id="boardModal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="boardTitle">
+    <div class="top"><h2 id="boardTitle">🏆 世界排行榜</h2><button class="btn small" id="closeBoard" type="button" aria-label="關閉">✕</button></div>
+    <p class="status" id="status">連線中…</p>
+    <ol id="board"></ol>
+    <button class="btn small" id="refreshBoard" type="button">重新整理</button>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
@@ -242,6 +252,13 @@ canvas{display:block;width:100%;height:auto}
       rows=out;$('status').textContent=out.length?'全世界玩家的前 10 名（每人取最高分）':'還沒有人上榜，成為第一名吧';board();
     }).catch(function(){rows=null;$('status').textContent='無法連線，顯示示範資料';board()});
   }
+  function openBoard(){$('boardModal').hidden=false;loadBoard();$('closeBoard').focus()}
+  function closeBoard(){$('boardModal').hidden=true}
+  $('openBoard').onclick=openBoard;
+  $('closeBoard').onclick=closeBoard;
+  $('refreshBoard').onclick=loadBoard;
+  $('boardModal').addEventListener('click',function(e){if(e.target===$('boardModal'))closeBoard()});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')closeBoard()});
   function submit(s){
     var nm=nick();if(s<=0||!nm)return;
     fetch(REST,{method:'POST',headers:HD,body:JSON.stringify({name:nm,score:s})}).then(function(r){
@@ -293,7 +310,7 @@ canvas{display:block;width:100%;height:auto}
       show({t:finished?'完賽！':'撞車了！',p:'總分 '+s+'，等待其他玩家完成…'});
       checkAllDone();
     }else{
-      show({t:'撞車了！',p:'總分 '+s+'（'+Math.floor(dist)+' 公尺、'+coins+' 枚金幣'+(cur().x!==1?'，難度加成 ×'+cur().x:'')+'）。'+LEVELS[lv].n+'個人最佳 '+best+'。',lv:true,btn:'再玩一次',act:startSolo,alt:'回首頁看排行榜',altAct:toHome});
+      show({t:'撞車了！',p:'總分 '+s+'（'+Math.floor(dist)+' 公尺、'+coins+' 枚金幣'+(cur().x!==1?'，難度加成 ×'+cur().x:'')+'）。'+LEVELS[lv].n+'個人最佳 '+best+'。',lv:true,btn:'再玩一次',act:startSolo,alt:'回首頁',altAct:toHome});
     }
   }
   function pause(){
@@ -575,7 +592,7 @@ canvas{display:block;width:100%;height:auto}
     }else $('phaseText').textContent='請手動複製：'+link;
   };
 
-  hud();board();loadBoard();last=performance.now();requestAnimationFrame(loop);
+  hud();last=performance.now();requestAnimationFrame(loop);
   var qr=(new URLSearchParams(location.search).get('room')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);
   var saved=null;
   try{saved=JSON.parse(sessionStorage.getItem('rainbow-room')||'null')}catch(e){}
