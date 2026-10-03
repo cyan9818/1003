@@ -77,7 +77,44 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;background:var(--soft);pa
     <input id="pass" type="password" autocomplete="current-password" required>
     <button class="btn primary" id="loginBtn" type="submit">下一步：輸入驗證碼</button>
     <p class="status" id="loginMsg">登入需要「帳號密碼」加上「驗證 App 的 6 位數驗證碼」。</p>
+    <button class="btn small" id="forgot" type="button">忘記密碼？</button>
   </form>
+</main>
+
+<!-- 申請重設密碼 -->
+<main class="wrap narrow" id="reset" hidden>
+  <h1>忘記密碼</h1>
+  <form class="card" id="resetForm">
+    <label for="rsEmail">管理員 Email</label>
+    <input id="rsEmail" type="email" autocomplete="username" required>
+    <label for="hcA" id="hcQ">人機驗證</label>
+    <input id="hcA" inputmode="numeric" autocomplete="off" required placeholder="輸入答案">
+    <button class="btn primary" id="rsBtn" type="submit">寄送重設連結</button>
+    <button class="btn small" id="rsBack" type="button">回登入頁</button>
+    <p class="status" id="rsMsg">為了安全，不論 Email 是否存在，畫面都會顯示相同的結果。重設連結會寄到管理員信箱，點開後還需要輸入驗證 App 的驗證碼才能設定新密碼。</p>
+  </form>
+</main>
+
+<!-- 重設密碼（從信件連結回來） -->
+<main class="wrap narrow" id="recover" hidden>
+  <h1>重設密碼</h1>
+  <div class="card">
+    <div id="rcStep1">
+      <label for="rcCode">第 1 步：驗證碼</label>
+      <input id="rcCode" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" placeholder="000000">
+      <p class="status">請輸入驗證 App 目前顯示的 6 位數驗證碼。通過後才能設定新密碼。</p>
+      <button class="btn primary" id="rcVerify" type="button">驗證</button>
+    </div>
+    <div id="rcStep2" hidden>
+      <label for="np1">第 2 步：新密碼（至少 12 個字元）</label>
+      <input id="np1" type="password" autocomplete="new-password">
+      <label for="np2">再輸入一次</label>
+      <input id="np2" type="password" autocomplete="new-password">
+      <button class="btn primary" id="rcSave" type="button">更新密碼</button>
+    </div>
+    <button class="btn small" id="rcOut" type="button">取消並登出</button>
+    <p class="status" id="rcMsg"></p>
+  </div>
 </main>
 
 <!-- 驗證碼 -->
@@ -148,15 +185,17 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;background:var(--soft);pa
   var URL_='https://vkpzblltqznkvgfnjcdp.supabase.co',KEY='sb_publishable_N6kWoe_b_ego0YqWMAPVtg_jNzcB96D';
   var $=function(i){return document.getElementById(i)};
   function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
-  var sb=window.supabase.createClient(URL_,KEY,{auth:{storage:window.sessionStorage,storageKey:'rcg-admin',persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+  var sb=window.supabase.createClient(URL_,KEY,{auth:{storage:window.sessionStorage,storageKey:'rcg-admin',persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
   var factorId=null,data={fb:[],ses:[],world:[],daily:[]},fbOnly=false;
 
-  function view(n){['login','mfa','denied','app'].forEach(function(x){$(x).hidden=x!==n})}
+  function view(n){['login','reset','recover','mfa','denied','app'].forEach(function(x){$(x).hidden=x!==n})}
+  var recovery=/type=recovery|error_code=|error=/.test(location.hash);
   function say(id,t,err){var e=$(id);e.textContent=t;e.className='status'+(err?' err':'')}
   function when(t){return t?new Date(t).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false,month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):''}
 
   /* ---------- 登入流程 ---------- */
   async function route(){
+    if(recovery)return startRecovery();
     var r=await sb.auth.getSession();
     if(!r.data.session){view('login');return}
     var a=await sb.auth.mfa.getAuthenticatorAssuranceLevel();
@@ -315,7 +354,64 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;background:var(--soft);pa
     var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='sessions.csv';document.body.appendChild(a);a.click();a.remove();
   };
 
-  sb.auth.onAuthStateChange(function(ev){if(ev==='SIGNED_OUT')view('login')});
+  /* ---------- 忘記密碼：申請 ---------- */
+  var hc=0;
+  function newHc(){var a=2+Math.floor(Math.random()*8),b=2+Math.floor(Math.random()*8);hc=a+b;$('hcQ').textContent='人機驗證：'+a+' + '+b+' = ？';$('hcA').value=''}
+  $('forgot').onclick=function(){newHc();$('rsEmail').value=$('email').value;view('reset')};
+  $('rsBack').onclick=function(){view('login')};
+  $('resetForm').addEventListener('submit',async function(e){
+    e.preventDefault();
+    var last=0;try{last=+sessionStorage.getItem('rcg-reset-ts')||0}catch(x){}
+    var wait=60-Math.floor((Date.now()-last)/1000);
+    if(wait>0){say('rsMsg','請等 '+wait+' 秒後再申請。',true);return}
+    if(+$('hcA').value.trim()!==hc){say('rsMsg','人機驗證答案不正確，請再試一次。',true);newHc();return}
+    $('rsBtn').disabled=true;say('rsMsg','處理中…');
+    try{sessionStorage.setItem('rcg-reset-ts',String(Date.now()))}catch(x){}
+    await sb.auth.resetPasswordForEmail($('rsEmail').value.trim(),{redirectTo:location.origin+location.pathname});
+    $('rsBtn').disabled=false;newHc();
+    say('rsMsg','如果這個 Email 是管理員帳號，重設連結已寄出，請到信箱查看（可能在垃圾郵件）。連結有時效，過期請重新申請。');
+  });
+
+  /* ---------- 忘記密碼：從信件連結回來 ---------- */
+  var rcFactor=null;
+  async function startRecovery(){
+    var r=await sb.auth.getSession();
+    try{history.replaceState(null,'',location.pathname+location.search)}catch(x){}
+    if(!r.data.session){recovery=false;view('login');say('loginMsg','重設連結無效或已過期，請重新申請。',true);return}
+    var f=await sb.auth.mfa.listFactors();
+    var ver=((f.data&&f.data.all)||[]).filter(function(x){return x.factor_type==='totp'&&x.status==='verified'});
+    view('recover');say('rcMsg','');
+    if(ver.length){rcFactor=ver[0].id;$('rcStep1').hidden=false;$('rcStep2').hidden=true;$('rcCode').focus()}
+    else{rcFactor=null;$('rcStep1').hidden=true;$('rcStep2').hidden=false;say('rcMsg','這個帳號還沒有設定驗證 App，請先設定新密碼，之後登入時會要求設定驗證碼。')}
+  }
+  $('rcVerify').onclick=async function(){
+    var code=$('rcCode').value.replace(/\s/g,'');
+    if(!/^\d{6}$/.test(code)){say('rcMsg','請輸入 6 位數字。',true);return}
+    $('rcVerify').disabled=true;say('rcMsg','驗證中…');
+    var ch=await sb.auth.mfa.challenge({factorId:rcFactor});
+    var v=ch.error?ch:await sb.auth.mfa.verify({factorId:rcFactor,challengeId:ch.data.id,code:code});
+    $('rcVerify').disabled=false;
+    if(v.error){say('rcMsg','驗證碼不正確或已過期，請輸入 App 上最新的 6 位數。',true);return}
+    say('rcMsg','驗證成功，請設定新密碼。');$('rcStep1').hidden=true;$('rcStep2').hidden=false;$('np1').focus();
+  };
+  $('rcSave').onclick=async function(){
+    var a=$('np1').value,b=$('np2').value;
+    if(a.length<12){say('rcMsg','新密碼至少要 12 個字元。',true);return}
+    if(a!==b){say('rcMsg','兩次輸入的密碼不一樣。',true);return}
+    if(rcFactor){
+      var lv=await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+      if(!lv.data||lv.data.currentLevel!=='aal2'){say('rcMsg','需要先通過驗證碼。',true);$('rcStep1').hidden=false;$('rcStep2').hidden=true;return}
+    }
+    $('rcSave').disabled=true;say('rcMsg','更新中…');
+    var u=await sb.auth.updateUser({password:a});
+    $('rcSave').disabled=false;
+    if(u.error){say('rcMsg','更新失敗：'+u.error.message,true);return}
+    $('np1').value='';$('np2').value='';recovery=false;
+    await sb.auth.signOut();view('login');say('loginMsg','密碼已更新，請用新密碼登入（仍需輸入驗證碼）。');
+  };
+  $('rcOut').onclick=async function(){recovery=false;await sb.auth.signOut();view('login')};
+
+  sb.auth.onAuthStateChange(function(ev){if(ev==='SIGNED_OUT')view('login');if(ev==='PASSWORD_RECOVERY')recovery=true});
   route();
 })();
 </script>
