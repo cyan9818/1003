@@ -75,6 +75,11 @@ canvas{display:block;width:100%;height:auto}
 .overlay h2.big{font-size:4rem}
 .overlay p{margin:0;max-width:26ch;line-height:1.6}
 .overlay ul{width:100%;max-width:300px;text-align:left}
+.lvs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:100%;max-width:320px}
+.lv{font:inherit;border:2px solid var(--line);background:var(--card);color:var(--fg);border-radius:12px;padding:6px 2px;cursor:pointer;line-height:1.25}
+.lv b{display:block;font-size:.85rem}.lv small{font-size:.7rem;color:var(--muted)}.lv span{font-size:1.3rem}
+.lv[aria-pressed="true"]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--card))}
+.lv:focus-visible{outline:3px solid var(--coin);outline-offset:2px}
 .pad{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .pad .btn{font-size:1.5rem;padding:10px;min-height:60px}
 @media (prefers-reduced-motion:reduce){.btn{transition:none}}
@@ -138,6 +143,7 @@ canvas{display:block;width:100%;height:auto}
       <span class="chip"><small>距離</small><span id="dist">0 m</span></span>
       <span class="chip"><small>金幣</small><span id="coins">0</span></span>
       <span class="chip" id="lives">♥♥♥</span>
+      <span class="chip" id="lvChip" hidden></span>
       <span class="sp"></span>
       <button class="ibtn" id="pause" type="button" aria-label="暫停">⏸</button>
       <button class="ibtn" id="theme3" type="button" aria-label="切換深色或淺色模式">🌓</button>
@@ -147,6 +153,7 @@ canvas{display:block;width:100%;height:auto}
       <h2 id="ovT"></h2>
       <p id="ovP"></p>
       <ul id="ovList" hidden></ul>
+      <div class="lvs" id="ovLv" hidden></div>
       <button class="btn primary" id="go" type="button"></button>
       <button class="btn small" id="alt" type="button"></button>
     </div>
@@ -175,12 +182,23 @@ canvas{display:block;width:100%;height:auto}
 
   var state='ready',lane=1,px=LW*1.5,speed=0,dist=0,wd=0,nextAt=0,coins=0,lives=3,inv=0,items=[],scroll=0,last=0,best=0,shake=0,finished=false;
   var rnd=Math.random,mp=null,actGo=null,actAlt=null;
-  try{best=parseInt(localStorage.getItem('rainbow-best'))||0}catch(e){}
   var demo=[['小橘',3820],['阿豪',3140],['Mia',2680],['大雄',2210],['小海',1760],['路過的鴨',1200]];
   var carColors=['#3b82f6','#a855f7','#10b981','#f97316','#ec4899'];
   function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+  var LEVELS=[
+    {e:'🐌',n:'蝸牛',d:'很慢',b:110,g:.5,m:300,gap:1.3,x:.6},
+    {e:'🐢',n:'烏龜',d:'慢',b:145,g:.75,m:400,gap:1.15,x:.8},
+    {e:'🐇',n:'兔子',d:'標準',b:180,g:1,m:520,gap:1,x:1},
+    {e:'🐎',n:'駿馬',d:'快',b:220,g:1.2,m:620,gap:.92,x:1.2},
+    {e:'🐆',n:'獵豹',d:'快速',b:270,g:1.45,m:740,gap:.85,x:1.5},
+    {e:'🦅',n:'游隼',d:'變態難',b:340,g:1.8,m:900,gap:.75,x:2}
+  ];
+  var lv=2;try{var l0=parseInt(localStorage.getItem('rainbow-lv'));if(l0>=0&&l0<6)lv=l0}catch(e){}
+  function cur(){return mp?LEVELS[2]:LEVELS[lv]}
+  function bestKey(){return 'rainbow-best-'+(mp?2:lv)}
+  function loadBest(){try{best=parseInt(localStorage.getItem(bestKey()))||0}catch(e){best=0}}
   function laneX(l){return LW*l+LW/2}
-  function score(){return Math.floor(dist/10)+coins*20}
+  function score(){return Math.round((Math.floor(dist/10)+coins*20)*cur().x)}
   function hud(){$('dist').textContent=Math.floor(dist)+' m';$('coins').textContent=coins;$('lives').textContent='♥'.repeat(Math.max(0,lives))+'♡'.repeat(3-Math.max(0,lives))}
 
   /* ---------- 畫面切換 ---------- */
@@ -237,11 +255,22 @@ canvas{display:block;width:100%;height:auto}
     $('ovList').innerHTML=o.list||'';$('ovList').hidden=!o.list;
     $('go').hidden=!o.btn;$('go').textContent=o.btn||'';actGo=o.act||null;
     $('alt').hidden=!o.alt;$('alt').textContent=o.alt||'';actAlt=o.altAct||null;
+    var lc=$('ovLv');lc.hidden=!o.lv;if(o.lv)renderLv();
     $('ov').hidden=false;
   }
+  function renderLv(){
+    $('ovLv').innerHTML=LEVELS.map(function(L,i){
+      return '<button type="button" class="lv" data-i="'+i+'" aria-pressed="'+(i===lv)+'"><span>'+L.e+'</span><b>'+L.n+'</b><small>'+L.d+(L.x!==1?' ×'+L.x:'')+'</small></button>'}).join('');
+  }
+  $('ovLv').addEventListener('click',function(e){
+    var b=e.target.closest('.lv');if(!b)return;
+    lv=+b.dataset.i;try{localStorage.setItem('rainbow-lv',lv)}catch(x){}
+    loadBest();renderLv();setChip();
+  });
+  function setChip(){var c=$('lvChip');c.hidden=!!mp;c.textContent=LEVELS[lv].e+' '+LEVELS[lv].n}
   function reset(seed){
     rnd=seed==null?Math.random:mulberry(seed);
-    lane=1;px=laneX(1);speed=180;dist=0;wd=0;nextAt=300;coins=0;lives=3;inv=0;items=[];finished=false;hud();
+    lane=1;px=laneX(1);speed=cur().b;dist=0;wd=0;nextAt=300;coins=0;lives=3;inv=0;items=[];finished=false;hud();
   }
   function toHome(){
     if(mp)leave(true);
@@ -251,20 +280,20 @@ canvas{display:block;width:100%;height:auto}
     ensureNick();if(mp)leave(true);
     go('play');
     $('mini').hidden=true;$('pause').hidden=false;
-    reset();state='ready';
-    show({t:'準備出發',p:'左右換車道，閃開車輛與路障，吃金幣加分。',btn:'開始',act:startSolo,alt:'回首頁',altAct:toHome});
+    reset();state='ready';loadBest();setChip();
+    show({t:'選擇難度',p:'難度越高，分數加成越多。',lv:true,btn:'開始',act:startSolo,alt:'回首頁',altAct:toHome});
   }
-  function startSolo(){reset();state='play';$('ov').hidden=true;last=performance.now()}
+  function startSolo(){loadBest();setChip();reset();state='play';$('ov').hidden=true;last=performance.now()}
   function endRun(){
     var s=score();
-    if(s>best){best=s;try{localStorage.setItem('rainbow-best',best)}catch(e){}}
+    if(s>best){best=s;try{localStorage.setItem(bestKey(),best)}catch(e){}}
     hud();submit(s);state='over';
     if(mp){
       mp.me.done=true;mp.me.fin=finished;sendProg(true);
       show({t:finished?'完賽！':'撞車了！',p:'總分 '+s+'，等待其他玩家完成…'});
       checkAllDone();
     }else{
-      show({t:'撞車了！',p:'總分 '+s+'（'+Math.floor(dist)+' 公尺、'+coins+' 枚金幣）。個人最佳 '+best+'。',btn:'再玩一次',act:startSolo,alt:'回首頁看排行榜',altAct:toHome});
+      show({t:'撞車了！',p:'總分 '+s+'（'+Math.floor(dist)+' 公尺、'+coins+' 枚金幣'+(cur().x!==1?'，難度加成 ×'+cur().x:'')+'）。'+LEVELS[lv].n+'個人最佳 '+best+'。',lv:true,btn:'再玩一次',act:startSolo,alt:'回首頁看排行榜',altAct:toHome});
     }
   }
   function pause(){
@@ -281,10 +310,10 @@ canvas{display:block;width:100%;height:auto}
     if(t==='coin'&&extra){items.push({t:'coin',l:l,y:-120,c:0,v:0});items.push({t:'coin',l:l,y:-180,c:0,v:0})}
   }
   function update(dt){
-    speed=Math.min(520,180+Math.floor(dist/500)*35+dist*.02);
+    var L=cur();speed=Math.min(L.m,L.b+(Math.floor(dist/500)*35+dist*.02)*L.g);
     dist+=speed*dt/10; wd+=speed*dt; scroll=(scroll+speed*dt)%80;
     px+=(laneX(lane)-px)*Math.min(1,dt*14);
-    if(wd>=nextAt){addItem();nextAt=wd+Math.max(.35,.9-speed/900)*speed*(.8+rnd()*.5)}
+    if(wd>=nextAt){addItem();nextAt=wd+Math.max(.35,.9-speed/900)*speed*L.gap*(.8+rnd()*.5)}
     if(inv>0)inv-=dt; if(shake>0)shake-=dt;
     var py=H-110;
     items.forEach(function(it){
@@ -418,7 +447,7 @@ canvas{display:block;width:100%;height:auto}
     mp.phase='race';mp.prog={};mp.rank=0;mp.me={done:false,fin:false};
     mp.expected=mp.players.map(function(x){return x.id});
     if(mp.expected.indexOf(mp.id)<0)mp.expected.push(mp.id);
-    $('mini').hidden=false;$('pause').hidden=true;
+    $('mini').hidden=false;$('pause').hidden=true;setChip();loadBest();
     go('play');reset(p.seed);state='count';
     var n=3;show({t:String(n),big:true});
     renderMp();
