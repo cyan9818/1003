@@ -81,6 +81,15 @@ canvas{display:block;width:100%;height:auto}
 .lv b{display:block;font-size:.85rem}.lv small{font-size:.7rem;color:var(--muted)}.lv span{font-size:1.3rem}
 .lv[aria-pressed="true"]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--card))}
 .lv:focus-visible{outline:3px solid var(--coin);outline-offset:2px}
+.toolbar{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.bk{flex:1}
+.bk[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+.skins{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.skin{display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--bg);border-radius:14px;padding:10px;border:2px solid transparent}
+.skin.on{border-color:var(--accent)}
+.swatch{width:44px;height:72px;border-radius:12px;border:2px solid var(--fg)}
+.skin b{font-size:.9rem}
+.skin .btn{width:100%;min-height:36px;padding:2px 6px;font-size:.85rem}
 .toast{position:absolute;top:112px;left:50%;transform:translateX(-50%);background:var(--hud);color:var(--fg);padding:4px 14px;border-radius:999px;font-weight:700;font-size:.9rem;pointer-events:none;white-space:nowrap}
 .pad{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .pad .btn{font-size:1.5rem;padding:10px;min-height:60px}
@@ -97,10 +106,13 @@ canvas{display:block;width:100%;height:auto}
   <div class="top">
     <h1>彩虹公路小賽車</h1>
     <div class="row">
-      <button class="btn small" id="openBoard" type="button">🏆 排行榜</button>
       <button class="btn small" id="snd1" type="button" aria-label="開關音效">🔊</button>
       <button class="btn small" id="theme1" type="button" aria-label="切換深色或淺色模式">🌓</button>
     </div>
+  </div>
+  <div class="toolbar">
+    <button class="btn small" id="openBoard" type="button">🏆 排行榜</button>
+    <button class="btn small" id="openShop" type="button">🛍 商店 <span id="walletTxt">🪙0</span></button>
   </div>
   <section class="card">
     <div id="invite" class="invite" hidden></div>
@@ -115,6 +127,7 @@ canvas{display:block;width:100%;height:auto}
       <button class="btn" id="join" type="button">加入</button>
     </div>
     <button class="btn" id="solo" type="button">個人遊玩</button>
+    <button class="btn" id="daily" type="button">📅 每日挑戰（全球同一條路況）</button>
     <p class="status" id="homeMsg"></p>
   </section>
   <p class="note">操作：手機點畫面左右半邊、按下方按鈕或左右滑動；電腦用 ← → 或 A D。每場 3 條命，撞車扣一條，金幣加分。路上的 🛡 護盾（擋一次撞擊）、🧲 磁鐵（吸金幣）、⚡ 衝刺（加速並撞開障礙）會短暫強化你。分數會自動上傳世界排行榜。</p>
@@ -162,7 +175,8 @@ canvas{display:block;width:100%;height:auto}
       <div class="lvs" id="ovLv" hidden></div>
       <button class="btn primary" id="go" type="button"></button>
       <button class="btn small" id="alt" type="button"></button>
-      <button class="btn small" id="boardBtn" type="button" hidden>🏆 世界排行榜</button>
+      <button class="btn small" id="boardBtn" type="button" hidden>🏆 排行榜</button>
+      <button class="btn small" id="shareBtn" type="button" hidden>📤 分享戰績</button>
     </div>
   </div>
   <div class="pad">
@@ -173,10 +187,29 @@ canvas{display:block;width:100%;height:auto}
 
 <div class="modal" id="boardModal" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="boardTitle">
-    <div class="top"><h2 id="boardTitle">🏆 世界排行榜</h2><button class="btn small" id="closeBoard" type="button" aria-label="關閉">✕</button></div>
+    <div class="top"><h2 id="boardTitle">🏆 排行榜</h2><button class="btn small" id="closeBoard" type="button" aria-label="關閉">✕</button></div>
+    <div class="row"><button class="btn small bk" id="bkWorld" type="button" aria-pressed="true">世界榜</button><button class="btn small bk" id="bkDaily" type="button" aria-pressed="false">今日挑戰</button></div>
     <p class="status" id="status">連線中…</p>
     <ol id="board"></ol>
     <button class="btn small" id="refreshBoard" type="button">重新整理</button>
+  </div>
+</div>
+
+<div class="modal" id="shopModal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="shopTitle">
+    <div class="top"><h2 id="shopTitle">🛍 車色商店</h2><button class="btn small" id="closeShop" type="button" aria-label="關閉">✕</button></div>
+    <p class="status" id="shopInfo"></p>
+    <div class="skins" id="skins"></div>
+    <p class="note">金幣來自每一場遊戲吃到的金幣，每天第一場每日挑戰另有 50 枚獎勵。車色只存在這支裝置的瀏覽器裡。</p>
+  </div>
+</div>
+
+<div class="modal" id="shareModal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+    <div class="top"><h2 id="shareTitle">📤 戰績圖</h2><button class="btn small" id="closeShare" type="button" aria-label="關閉">✕</button></div>
+    <img id="shareImg" alt="戰績圖" style="width:100%;border-radius:12px">
+    <p class="status">長按圖片可以儲存或分享，也可以按下方按鈕下載。</p>
+    <a class="btn" id="shareDl" download="rainbow-result.png" style="text-align:center;text-decoration:none">下載圖片</a>
   </div>
 </div>
 
@@ -210,8 +243,9 @@ canvas{display:block;width:100%;height:auto}
     {e:'🦅',n:'游隼',d:'變態難',b:340,g:1.8,m:900,gap:.75,x:2}
   ];
   var lv=2;try{var l0=parseInt(localStorage.getItem('rainbow-lv'));if(l0>=0&&l0<6)lv=l0}catch(e){}
-  function cur(){return mp?LEVELS[2]:LEVELS[lv]}
-  function bestKey(){return 'rainbow-best-'+(mp?2:lv)}
+  var daily=false;
+  function cur(){return (mp||daily)?LEVELS[2]:LEVELS[lv]}
+  function bestKey(){return mp?'rainbow-best-2':(daily?'rainbow-daily-'+dayKey():'rainbow-best-'+lv)}
   function loadBest(){try{best=parseInt(localStorage.getItem(bestKey()))||0}catch(e){best=0}}
   function laneX(l){return LW*l+LW/2}
   function score(){return Math.round((Math.floor(dist/10)+coins*20)*cur().x)}
@@ -287,38 +321,134 @@ canvas{display:block;width:100%;height:auto}
   var n0='';try{n0=localStorage.getItem('rainbow-nick')||''}catch(e){}
   $('nick').value=n0||randNick();saveNick();
 
-  /* ---------- 世界排行榜 ---------- */
-  var REST=SB_URL+'/rest/v1/car_scores',rows=null;
+  /* ---------- 錢包與車色 ---------- */
+  var SKINS=[
+    {id:'red',n:'火焰紅',c:null,p:0},{id:'blue',n:'天空藍',c:'#3b82f6',p:30},{id:'green',n:'薄荷綠',c:'#10b981',p:30},
+    {id:'purple',n:'葡萄紫',c:'#a855f7',p:60},{id:'pink',n:'櫻花粉',c:'#ec4899',p:60},{id:'black',n:'夜行黑',c:'#1f2937',p:100},
+    {id:'gold',n:'黃金',c:'#f5b301',p:150},{id:'rainbow',n:'彩虹',c:'rainbow',p:300}
+  ];
+  var wallet=0,owned=['red'],skin='red';
+  try{var sh=JSON.parse(localStorage.getItem('rainbow-shop')||'null');if(sh){wallet=+sh.w||0;owned=sh.o||['red'];skin=sh.s||'red'}}catch(e){}
+  function saveShop(){try{localStorage.setItem('rainbow-shop',JSON.stringify({w:wallet,o:owned,s:skin}))}catch(e){}}
+  function updWallet(){$('walletTxt').textContent='🪙'+wallet}
+  function skinColor(){
+    var k=SKINS.filter(function(x){return x.id===skin})[0]||SKINS[0];
+    if(!k.c)return tok('--accent');
+    if(k.c==='rainbow')return 'hsl('+Math.floor((Date.now()/8)%360)+',85%,55%)';
+    return k.c;
+  }
+  function swatchBg(k){return !k.c?'var(--accent)':(k.c==='rainbow'?'linear-gradient(#ef4444,#f59e0b,#10b981,#3b82f6,#a855f7)':k.c)}
+  function renderShop(){
+    $('shopInfo').textContent='你有 🪙'+wallet+' 枚金幣';
+    $('skins').innerHTML=SKINS.map(function(k){
+      var has=owned.indexOf(k.id)>-1,on=skin===k.id,btn;
+      if(on)btn='<button class="btn" disabled>使用中</button>';
+      else if(has)btn='<button class="btn primary" data-act="use" data-id="'+k.id+'">使用</button>';
+      else btn='<button class="btn" data-act="buy" data-id="'+k.id+'"'+(wallet<k.p?' disabled':'')+'>🪙'+k.p+' 購買</button>';
+      return '<div class="skin'+(on?' on':'')+'"><div class="swatch" style="background:'+swatchBg(k)+'"></div><b>'+k.n+'</b>'+btn+'</div>';
+    }).join('');
+  }
+  $('skins').addEventListener('click',function(e){
+    var b=e.target.closest('button[data-act]');if(!b)return;
+    var k=SKINS.filter(function(x){return x.id===b.dataset.id})[0];if(!k)return;
+    if(b.dataset.act==='buy'&&wallet>=k.p&&owned.indexOf(k.id)<0){wallet-=k.p;owned.push(k.id);skin=k.id;sfx('power')}
+    else if(b.dataset.act==='use'&&owned.indexOf(k.id)>-1){skin=k.id;sfx('coin')}
+    saveShop();updWallet();renderShop();
+  });
+
+  /* ---------- 排行榜（世界榜與今日挑戰榜） ---------- */
+  var REST=SB_URL+'/rest/v1/car_scores',REST_D=SB_URL+'/rest/v1/daily_scores';
+  var boardKind='world',rowsK={world:null,daily:null};
+  function dayKey(){return new Date(Date.now()+8*3600*1000).toISOString().slice(0,10)}
+  function daySeed(k){var h=2166136261;for(var i=0;i<k.length;i++){h^=k.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
   function board(){
-    var list=rows?rows:demo.map(function(d){return{name:d[0],score:d[1]}});
+    var rows=rowsK[boardKind];
+    var list=rows?rows:(boardKind==='world'?demo.map(function(d){return{name:d[0],score:d[1]}}):[]);
     var nm=nick();
     $('board').innerHTML=list.map(function(r,i){
       var me=rows&&nm&&r.name===nm;
       return '<li class="'+(me?'me':'')+'"><span class="nm">'+(i+1)+'. '+esc(r.name)+'</span><span class="sc">'+r.score+'</span></li>'}).join('');
   }
-  function loadBoard(){
-    $('status').textContent='連線中…';
-    return fetch(REST+'?select=name,score&order=score.desc&limit=100',{headers:HD}).then(function(r){
+  function loadBoard(k){
+    k=(k==='world'||k==='daily')?k:boardKind;
+    var url=k==='daily'?REST_D+'?select=name,score&day=eq.'+dayKey()+'&order=score.desc&limit=100':REST+'?select=name,score&order=score.desc&limit=100';
+    if(k===boardKind)$('status').textContent='連線中…';
+    return fetch(url,{headers:HD}).then(function(r){
       if(!r.ok)throw 0;return r.json()}).then(function(j){
       var seen={},out=[];
       j.forEach(function(r){if(!seen[r.name]&&out.length<10){seen[r.name]=1;out.push(r)}});
-      rows=out;$('status').textContent=out.length?'全世界玩家的前 10 名（每人取最高分）':'還沒有人上榜，成為第一名吧';board();
-    }).catch(function(){rows=null;$('status').textContent='無法連線，顯示示範資料';board()});
+      rowsK[k]=out;
+      if(k===boardKind){
+        $('status').textContent=out.length?(k==='daily'?'今日（'+dayKey()+'）挑戰前 10 名':'全世界玩家的前 10 名（每人取最高分）'):(k==='daily'?'今天還沒有人挑戰，搶第一名吧':'還沒有人上榜，成為第一名吧');
+        board();
+      }
+    }).catch(function(){rowsK[k]=null;if(k===boardKind){$('status').textContent=k==='world'?'無法連線，顯示示範資料':'無法連線，請稍後再試';board()}});
   }
-  function openBoard(){$('boardModal').hidden=false;loadBoard();$('closeBoard').focus()}
-  function closeBoard(){$('boardModal').hidden=true}
-  $('openBoard').onclick=openBoard;
-  $('boardBtn').onclick=openBoard;
-  $('closeBoard').onclick=closeBoard;
-  $('refreshBoard').onclick=loadBoard;
-  $('boardModal').addEventListener('click',function(e){if(e.target===$('boardModal'))closeBoard()});
-  document.addEventListener('keydown',function(e){if(e.key==='Escape')closeBoard()});
+  function setBoardKind(k){
+    boardKind=k;
+    $('bkWorld').setAttribute('aria-pressed',k==='world');$('bkDaily').setAttribute('aria-pressed',k==='daily');
+    board();return loadBoard(k);
+  }
+  function openBoardFor(k){$('boardModal').hidden=false;setBoardKind(k);$('closeBoard').focus()}
+  function closeModals(){['boardModal','shopModal','shareModal'].forEach(function(i){$(i).hidden=true})}
+  $('openBoard').onclick=function(){openBoardFor('world')};
+  $('boardBtn').onclick=function(){openBoardFor(daily?'daily':'world')};
+  $('bkWorld').onclick=function(){setBoardKind('world')};
+  $('bkDaily').onclick=function(){setBoardKind('daily')};
+  $('closeBoard').onclick=closeModals;$('closeShop').onclick=closeModals;$('closeShare').onclick=closeModals;
+  $('refreshBoard').onclick=function(){loadBoard()};
+  $('openShop').onclick=function(){renderShop();$('shopModal').hidden=false;$('closeShop').focus()};
+  ['boardModal','shopModal','shareModal'].forEach(function(i){$(i).addEventListener('click',function(e){if(e.target===$(i))closeModals()})});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')closeModals()});
   function submit(s,thenOpen){
     var nm=nick();
-    var done=function(){loadBoard().then(function(){if(thenOpen&&state==='over')$('boardModal').hidden=false})};
+    var done=function(){loadBoard('world').then(function(){if(thenOpen&&state==='over'&&!daily)openBoardFor('world')})};
     if(s<=0||!nm){if(thenOpen)done();return}
     fetch(REST,{method:'POST',headers:HD,body:JSON.stringify({name:nm,score:s})}).then(done,done);
   }
+  function submitDaily(s){
+    var nm=nick();
+    var done=function(){loadBoard('daily').then(function(){if(state==='over'&&daily)openBoardFor('daily')})};
+    if(s<=0||!nm){done();return}
+    fetch(REST_D,{method:'POST',headers:HD,body:JSON.stringify({day:dayKey(),name:nm,score:s})}).then(done,done);
+  }
+
+  /* ---------- 戰績分享圖 ---------- */
+  var lastResult=null;
+  function shareResult(){
+    var r=lastResult;if(!r)return;
+    var link=location.origin+location.pathname;
+    var c=document.createElement('canvas');c.width=720;c.height=960;var g=c.getContext('2d');
+    var bgc=g.createLinearGradient(0,0,0,960);bgc.addColorStop(0,'#bfe8ff');bgc.addColorStop(1,'#e9f6ff');g.fillStyle=bgc;g.fillRect(0,0,720,960);
+    g.fillStyle='#4a5668';g.fillRect(200,560,320,400);g.fillStyle='#8fd46a';g.fillRect(0,560,200,400);g.fillRect(520,560,200,400);
+    g.fillStyle='#f6f1d4';for(var y=570;y<960;y+=70){g.fillRect(303,y,8,36);g.fillRect(409,y,8,36)}
+    var F="'Noto Sans TC','PingFang TC','Microsoft JhengHei',sans-serif";
+    g.textAlign='center';
+    g.fillStyle='#ff5a3c';g.font='900 54px '+F;g.fillText('彩虹公路小賽車',360,100);
+    g.fillStyle='#17324a';g.font='700 34px '+F;g.fillText(r.mode,360,170);
+    g.font='900 150px '+F;g.fillStyle='#17324a';g.fillText(String(r.score),360,330);
+    g.font='700 32px '+F;g.fillStyle='#5c7890';g.fillText('總分',360,375);
+    g.fillStyle='#17324a';g.font='700 34px '+F;
+    g.fillText('距離 '+r.dist+' m　金幣 '+r.coins,360,450);
+    if(r.rank)g.fillText('第 '+r.rank+' 名／共 '+r.count+' 人',360,505);
+    var sx=ctx;ctx=g;
+    car(360,820,r.color||'#ff5a3c',false);
+    ctx=sx;
+    g.fillStyle='#17324a';g.font='700 28px '+F;g.fillText(r.nick,360,920);
+    g.font='400 22px '+F;g.fillStyle='#5c7890';g.fillText(link.replace(/^https?:\/\//,''),360,945);
+    c.toBlob(function(b){
+      if(!b)return;
+      var text='我在彩虹公路小賽車拿到 '+r.score+' 分！來挑戰：'+link;
+      try{
+        var file=new File([b],'rainbow-result.png',{type:'image/png'});
+        var data={files:[file],title:'彩虹公路小賽車',text:text};
+        if(navigator.canShare&&navigator.canShare(data)){navigator.share(data).catch(function(){});return}
+      }catch(e){}
+      var url=URL.createObjectURL(b);
+      $('shareImg').src=url;$('shareDl').href=url;$('shareModal').hidden=false;
+    },'image/png');
+  }
+  $('shareBtn').onclick=shareResult;
 
   /* ---------- 遊戲核心 ---------- */
   function show(o){
@@ -327,7 +457,7 @@ canvas{display:block;width:100%;height:auto}
     $('ovList').innerHTML=o.list||'';$('ovList').hidden=!o.list;
     $('go').hidden=!o.btn;$('go').textContent=o.btn||'';actGo=o.act||null;
     $('alt').hidden=!o.alt;$('alt').textContent=o.alt||'';actAlt=o.altAct||null;
-    $('boardBtn').hidden=!o.board;
+    $('boardBtn').hidden=!o.board;$('shareBtn').hidden=!o.share;
     var lc=$('ovLv');lc.hidden=!o.lv;if(o.lv)renderLv();
     $('ov').hidden=false;
   }
@@ -340,33 +470,49 @@ canvas{display:block;width:100%;height:auto}
     lv=+b.dataset.i;try{localStorage.setItem('rainbow-lv',lv)}catch(x){}
     loadBest();renderLv();setChip();
   });
-  function setChip(){var c=$('lvChip');c.hidden=!!mp;c.textContent=LEVELS[lv].e+' '+LEVELS[lv].n}
+  function setChip(){var c=$('lvChip');c.hidden=!!mp;c.textContent=daily?'📅 每日挑戰':LEVELS[lv].e+' '+LEVELS[lv].n}
   function reset(seed){
     rnd=seed==null?Math.random:mulberry(seed);
     pw.shield=pw.magnet=pw.dash=0;pwChip();lane=1;px=laneX(1);speed=cur().b;dist=0;wd=0;nextAt=300;coins=0;lives=3;inv=0;items=[];finished=false;hud();
   }
   function toHome(){
     if(mp)leave(true);
-    state='ready';go('home');loadBoard();
+    daily=false;state='ready';go('home');loadBoard('world');
   }
   function soloIntro(){
     ensureNick();if(mp)leave(true);
-    go('play');
+    daily=false;go('play');
     $('mini').hidden=true;$('pause').hidden=false;
     reset();state='ready';loadBest();setChip();
     show({t:'選擇難度',p:'難度越高，分數加成越多。吃到 🛡🧲⚡ 道具有短暫強化。',lv:true,btn:'開始',act:startSolo,alt:'回首頁',altAct:toHome});
   }
-  function startSolo(){loadBest();setChip();reset();state='play';$('ov').hidden=true;last=performance.now()}
+  function dailyIntro(){
+    ensureNick();if(mp)leave(true);
+    daily=true;go('play');
+    $('mini').hidden=true;$('pause').hidden=false;
+    reset(daySeed(dayKey()));state='ready';loadBest();setChip();
+    show({t:'每日挑戰',p:dayKey()+'：今天全世界玩同一條路況，單場最高分上榜。可以重複挑戰。',btn:'開始',act:startSolo,alt:'回首頁',altAct:toHome,board:true});
+  }
+  function startSolo(){loadBest();setChip();reset(daily?daySeed(dayKey()):undefined);state='play';$('ov').hidden=true;last=performance.now()}
   function endRun(){
     var s=score();
     if(s>best){best=s;try{localStorage.setItem(bestKey(),best)}catch(e){}}
-    hud();state='over';sfx(finished?'win':'over');submit(s,!mp);
+    var earned=coins,bonus=0;
+    if(daily){var dk=dayKey(),got='';try{got=localStorage.getItem('rainbow-daily-bonus')||''}catch(e){}if(got!==dk){bonus=50;try{localStorage.setItem('rainbow-daily-bonus',dk)}catch(e){}}}
+    wallet+=earned+bonus;saveShop();updWallet();
+    var gain='獲得 🪙'+(earned+bonus)+(bonus?'（含每日首場獎勵 '+bonus+'）':'')+'。';
+    hud();state='over';sfx(finished?'win':'over');
+    lastResult={score:s,dist:Math.floor(dist),coins:coins,nick:nick(),color:skinColor(),
+      mode:mp?'多人比賽':(daily?'📅 每日挑戰 '+dayKey():LEVELS[lv].e+' '+LEVELS[lv].n+'・'+LEVELS[lv].d),rank:0,count:0};
+    if(daily)submitDaily(s);else submit(s,!mp);
     if(mp){
       mp.me.done=true;mp.me.fin=finished;sendProg(true);logEnd(finished?'finished':'crashed');
-      show({t:finished?'完賽！':'撞車了！',p:'總分 '+s+'，等待其他玩家完成…'});
+      show({t:finished?'完賽！':'撞車了！',p:'總分 '+s+'，'+gain+'等待其他玩家完成…'});
       checkAllDone();
+    }else if(daily){
+      show({t:'撞車了！',p:'總分 '+s+'（'+Math.floor(dist)+' 公尺、'+coins+' 枚金幣）。今日最高 '+best+'。'+gain,btn:'再挑戰一次',act:startSolo,alt:'回首頁',altAct:toHome,board:true,share:true});
     }else{
-      show({t:'撞車了！',p:'總分 '+s+'（'+Math.floor(dist)+' 公尺、'+coins+' 枚金幣'+(cur().x!==1?'，難度加成 ×'+cur().x:'')+'）。'+LEVELS[lv].n+'個人最佳 '+best+'。',lv:true,btn:'再玩一次',act:startSolo,alt:'回首頁',altAct:toHome,board:true});
+      show({t:'撞車了！',p:'總分 '+s+'（'+Math.floor(dist)+' 公尺、'+coins+' 枚金幣'+(cur().x!==1?'，難度加成 ×'+cur().x:'')+'）。'+LEVELS[lv].n+'個人最佳 '+best+'。'+gain,lv:true,btn:'再玩一次',act:startSolo,alt:'回首頁',altAct:toHome,board:true,share:true});
     }
   }
   function pause(){
@@ -453,7 +599,7 @@ canvas{display:block;width:100%;height:auto}
     var py2=H-110;
     if(pw.dash>0){ctx.fillStyle='rgba(250,204,21,.85)';ctx.beginPath();ctx.moveTo(px-18,py2+44);ctx.lineTo(px,py2+44+40+Math.random()*16);ctx.lineTo(px+18,py2+44);ctx.fill()}
     if(pw.magnet>0){ctx.strokeStyle='rgba(244,63,94,.55)';ctx.lineWidth=3;ctx.setLineDash([8,8]);ctx.beginPath();ctx.arc(px,py2,90,0,7);ctx.stroke();ctx.setLineDash([])}
-    if(inv<=0||Math.floor(inv*12)%2===0)car(px,py2,tok('--accent'),false);
+    if(inv<=0||Math.floor(inv*12)%2===0)car(px,py2,skinColor(),false);
     if(pw.shield>0){ctx.strokeStyle='rgba(56,189,248,.9)';ctx.fillStyle='rgba(56,189,248,.18)';ctx.lineWidth=4;ctx.beginPath();ctx.arc(px,py2,62,0,7);ctx.fill();ctx.stroke()}
     ctx.restore();
   }
@@ -543,7 +689,7 @@ canvas{display:block;width:100%;height:auto}
     mp.phase='race';mp.prog={};mp.rank=0;mp.me={done:false,fin:false};
     mp.expected=mp.players.map(function(x){return x.id});
     if(mp.expected.indexOf(mp.id)<0)mp.expected.push(mp.id);
-    $('mini').hidden=false;$('pause').hidden=true;setChip();loadBest();
+    daily=false;$('mini').hidden=false;$('pause').hidden=true;setChip();loadBest();
     go('play');reset(p.seed);state='count';
     logStart();
     var n=3;show({t:String(n),big:true});sfx('tick');
@@ -588,7 +734,8 @@ canvas{display:block;width:100%;height:auto}
     for(var i=0;i<list.length;i++)if(list[i].id===mp.id)mp.rank=i+1;
     logEnd(finished?'finished':'crashed',mp.rank,list.length);
     show({t:mp.rank===1?'冠軍！':'第 '+mp.rank+' 名',p:'共 '+list.length+' 人，你的總分 '+score()+(isHost()?'':'。等房主再開一場。'),
-      list:rankHtml(list,false),btn:isHost()?'再來一場':'',act:startRaceMsg,alt:'回房間大廳',altAct:function(){go('lobby');renderMp()},board:true});
+      list:rankHtml(list,false),btn:isHost()?'再來一場':'',act:startRaceMsg,alt:'回房間大廳',altAct:function(){go('lobby');renderMp()},board:true,share:true});
+    if(lastResult){lastResult.rank=mp.rank;lastResult.count=list.length}
     renderMp();
   }
   function renderMp(){
@@ -690,6 +837,8 @@ canvas{display:block;width:100%;height:auto}
     connect(c,false);
   };
   $('solo').onclick=soloIntro;
+  $('daily').onclick=dailyIntro;
+  updWallet();
   $('leave').onclick=function(){leave()};
   $('startRace').onclick=startRaceMsg;
   $('share').onclick=function(){
