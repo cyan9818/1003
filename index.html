@@ -24,7 +24,9 @@
   --bg:#0f1c2b; --fg:#e6f1fb; --muted:#8fa9c0; --card:#182a3f; --line:#2a4260;
   --accent:#ff7a5c; --accent-fg:#1a0d08; --road:#2b3441; --grass:#2f6b3f; --lane:#d9d3a8; --coin:#ffd34d;
   --good:#5fd58a; --good-bg:#16382a; --hud:rgba(24,42,63,.88); --isdark:1; color-scheme:dark}
-*{box-sizing:border-box}
+*{box-sizing:border-box;touch-action:manipulation}
+button,.stage,.pad,.overlay,.hud,.toolbar,h1{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+input,textarea{-webkit-user-select:text;user-select:text}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);padding-inline:12px;padding-block:12px}
 [hidden]{display:none!important}
 .screen{max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
@@ -95,6 +97,11 @@ canvas{display:block;width:100%;height:auto}
 .pad{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .pad .btn{font-size:1.5rem;padding:10px;min-height:60px}
 #lives{color:#e11d48}
+.fb-types{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.fb-types .btn{min-height:40px;padding:4px 6px;font-size:.85rem;box-shadow:0 2px 0 var(--fg)}
+.fb-types .btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+textarea.field{min-height:110px;resize:vertical;line-height:1.5}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
 #home .top h1{font-size:1.25rem}
 .modal{position:fixed;inset:0;z-index:10;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:16px}
 .sheet{background:var(--card);color:var(--fg);border-radius:18px;padding:16px;width:100%;max-width:420px;max-height:calc(100dvh - 32px);overflow:auto;display:flex;flex-direction:column;gap:12px;box-shadow:0 10px 40px rgba(0,0,0,.4)}
@@ -133,7 +140,8 @@ canvas{display:block;width:100%;height:auto}
     <p class="status" id="homeMsg"></p>
   </section>
   <p class="note">操作：手機點畫面左右半邊、按下方按鈕或左右滑動；電腦用 ← → 或 A D。每場 3 條命，撞車扣一條，金幣加分。路上的 🛡 護盾（擋一次撞擊）、🧲 磁鐵（吸金幣）、⚡ 衝刺（加速並撞開障礙）會短暫強化你。分數會自動上傳世界排行榜。</p>
-  <p class="note">隱私說明：為了統計與防止作弊，多人比賽會記錄連線地區（IP 只保留前三段）、裝置與瀏覽器資訊，以及該場成績，不會公開。</p>
+  <button class="btn small" id="openFb" type="button">💬 回報問題或意見</button>
+  <p class="note">隱私說明：為了統計與防止作弊，多人比賽會記錄連線地區（IP 只保留前三段）、裝置與瀏覽器資訊，以及該場成績，不會公開。回報問題時填的內容與（選填的）聯絡方式只用於處理這則回報。<span id="ver"></span></p>
 </main>
 
 <!-- 房間大廳 -->
@@ -194,6 +202,24 @@ canvas{display:block;width:100%;height:auto}
     <p class="status" id="status">連線中…</p>
     <ol id="board"></ol>
     <button class="btn small" id="refreshBoard" type="button">重新整理</button>
+  </div>
+</div>
+
+<div class="modal" id="fbModal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="fbTitle">
+    <div class="top"><h2 id="fbTitle">💬 回報問題或意見</h2><button class="btn small" id="closeFb" type="button" aria-label="關閉">✕</button></div>
+    <div class="fb-types" role="group" aria-label="回報類型">
+      <button class="btn" type="button" data-t="bug" aria-pressed="true">🐞 遇到問題</button>
+      <button class="btn" type="button" data-t="idea" aria-pressed="false">💡 建議</button>
+      <button class="btn" type="button" data-t="other" aria-pressed="false">其他</button>
+    </div>
+    <label class="cap" for="fbMsg">想告訴我們什麼？（5 到 500 字）</label>
+    <textarea class="field" id="fbMsg" maxlength="500" placeholder="例如：用 iPhone 在 LINE 裡開，按下開始比賽後畫面卡住"></textarea>
+    <label class="cap" for="fbContact">聯絡方式（選填，需要我們回覆時才填）</label>
+    <input class="field" id="fbContact" maxlength="80" autocomplete="off" placeholder="Email 或 LINE ID">
+    <input class="hp" id="fbWebsite" tabindex="-1" autocomplete="off" aria-hidden="true">
+    <p class="status" id="fbStatus">送出時會附上暱稱、瀏覽器與螢幕大小，方便重現問題。</p>
+    <button class="btn primary" id="fbSend" type="button">送出</button>
   </div>
 </div>
 
@@ -392,7 +418,7 @@ canvas{display:block;width:100%;height:auto}
     board();return loadBoard(k);
   }
   function openBoardFor(k){$('boardModal').hidden=false;setBoardKind(k);$('closeBoard').focus()}
-  function closeModals(){['boardModal','shopModal','shareModal'].forEach(function(i){$(i).hidden=true})}
+  function closeModals(){['boardModal','shopModal','shareModal','fbModal'].forEach(function(i){$(i).hidden=true})}
   $('openBoard').onclick=function(){openBoardFor('world')};
   $('boardBtn').onclick=function(){openBoardFor(daily?'daily':'world')};
   $('bkWorld').onclick=function(){setBoardKind('world')};
@@ -400,7 +426,7 @@ canvas{display:block;width:100%;height:auto}
   $('closeBoard').onclick=closeModals;$('closeShop').onclick=closeModals;$('closeShare').onclick=closeModals;
   $('refreshBoard').onclick=function(){loadBoard()};
   $('openShop').onclick=function(){renderShop();$('shopModal').hidden=false;$('closeShop').focus()};
-  ['boardModal','shopModal','shareModal'].forEach(function(i){$(i).addEventListener('click',function(e){if(e.target===$(i))closeModals()})});
+  ['boardModal','shopModal','shareModal','fbModal'].forEach(function(i){$(i).addEventListener('click',function(e){if(e.target===$(i))closeModals()})});
   document.addEventListener('keydown',function(e){if(e.key==='Escape')closeModals()});
   function submit(s,thenOpen){
     var nm=nick();
@@ -953,6 +979,35 @@ canvas{display:block;width:100%;height:auto}
     postLog({sid:ses.sid,event:'end',score:score(),distance:Math.floor(dist),coins:coins,duration_s:Math.round((Date.now()-ses.t0)/1000),end_reason:reason,rank:rank||undefined,players_count:count||undefined});
     ses.ended=true;
   }
+
+  /* ---------- 意見回報 ---------- */
+  var APP_VER='2026.10.03';
+  $('ver').textContent=' 版本 '+APP_VER;
+  var fbType='bug',fbBusy=false;
+  $('openFb').onclick=function(){$('fbStatus').textContent='送出時會附上暱稱、瀏覽器與螢幕大小，方便重現問題。';$('fbStatus').className='status';$('fbModal').hidden=false;$('fbMsg').focus()};
+  $('closeFb').onclick=closeModals;
+  document.querySelectorAll('.fb-types .btn').forEach(function(b){
+    b.onclick=function(){fbType=b.dataset.t;document.querySelectorAll('.fb-types .btn').forEach(function(x){x.setAttribute('aria-pressed',x===b)})};
+  });
+  $('fbSend').onclick=function(){
+    if(fbBusy)return;
+    var msg=$('fbMsg').value.trim(),st=$('fbStatus');
+    if(msg.length<5){st.textContent='請至少寫 5 個字，讓我們知道發生什麼事。';st.className='status err';return}
+    fbBusy=true;$('fbSend').disabled=true;st.textContent='送出中…';st.className='status';
+    fetch(SB_URL+'/functions/v1/submit-feedback',{method:'POST',headers:{'Content-Type':'application/json',apikey:KEY},body:JSON.stringify({
+      type:fbType,message:msg,contact:$('fbContact').value.trim(),website:$('fbWebsite').value,nickname:nick(),app_ver:APP_VER,
+      screen:innerWidth+'x'+innerHeight,lang:navigator.language})
+    }).then(function(r){
+      if(r.status===429)throw new Error('rate');
+      if(!r.ok)throw new Error('fail');
+      $('fbMsg').value='';st.textContent='已收到，謝謝你的回報！';st.className='status';
+      setTimeout(function(){if(!$('fbModal').hidden)closeModals()},1400);
+    }).catch(function(e){
+      st.textContent=e.message==='rate'?'送出太頻繁了，請過幾分鐘再試。':'送出失敗，請檢查網路後再試一次。';st.className='status err';
+    }).then(function(){fbBusy=false;$('fbSend').disabled=false});
+  };
+  /* 遊戲畫面不允許雙指縮放（iOS） */
+  document.addEventListener('gesturestart',function(e){if(!$('play').hidden)e.preventDefault()});
 
   /* ---------- 事件 ---------- */
   $('go').onclick=function(){if(actGo)actGo()};
