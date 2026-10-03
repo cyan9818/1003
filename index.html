@@ -120,6 +120,7 @@ canvas{display:block;width:100%;height:auto}
   <section class="card">
     <label class="cap">房號（告訴朋友，或複製邀請連結）</label>
     <div class="room-code" id="roomCode">----</div>
+    <button class="btn primary" id="share" type="button">分享給朋友（LINE 等）</button>
     <button class="btn" id="copy" type="button">複製邀請連結</button>
     <p class="status" id="phaseText"></p>
     <ul id="plist"></ul>
@@ -346,37 +347,65 @@ canvas{display:block;width:100%;height:auto}
   var CODE_CHARS='ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   function homeMsg(t,err){var e=$('homeMsg');e.textContent=t;e.className='status'+(err?' err':'')}
   function genCode(){var s='';for(var i=0;i<4;i++)s+=CODE_CHARS[Math.floor(Math.random()*CODE_CHARS.length)];return s}
-  function connect(code,create){
+  function saveRoom(){
+    if(!mp)return;
+    try{sessionStorage.setItem('rainbow-room',JSON.stringify({code:mp.code,id:mp.id,joinedAt:mp.joinedAt,create:mp.create,t:Date.now()}))}catch(e){}
+  }
+  function clearRoom(){try{sessionStorage.removeItem('rainbow-room')}catch(e){}}
+  function connect(code,create,saved){
     var nm=ensureNick();
     if(!sb){homeMsg('無法載入連線元件，請檢查網路後重新整理頁面。',true);return}
     leave(true);
-    var id=Math.random().toString(36).slice(2,10);
-    var ch=sb.channel('car-room-'+code,{config:{presence:{key:id},broadcast:{self:true}}});
-    mp={ch:ch,id:id,code:code,name:nm,joinedAt:Date.now(),players:[],prog:{},expected:[],phase:'lobby',create:create,lastSend:0,me:{done:false,fin:false},timer:null,rank:0};
+    mp={ch:null,id:saved?saved.id:Math.random().toString(36).slice(2,10),code:code,name:nm,joinedAt:saved?saved.joinedAt:Date.now(),
+      players:[],prog:{},expected:[],phase:'lobby',create:create,restored:!!saved,checked:false,lastSend:0,me:{done:false,fin:false},timer:null,rank:0,retry:0,retryTimer:0,hiddenAt:0};
+    saveRoom();
     homeMsg('連線中…');
-    ch.on('presence',{event:'sync'},function(){if(mp&&mp.ch===ch)onSync()})
-      .on('broadcast',{event:'start'},function(m){if(mp&&mp.ch===ch)onStart(m.payload)})
-      .on('broadcast',{event:'prog'},function(m){if(mp&&mp.ch===ch)onProg(m.payload)})
-      .subscribe(function(st){
-        if(!mp||mp.ch!==ch)return;
-        if(st==='SUBSCRIBED'){
-          ch.track({name:nm,joinedAt:mp.joinedAt}).then(function(){
-            setTimeout(function(){
-              if(mp&&mp.ch===ch&&!mp.create&&mp.players.length<2){leave(true);go('home');homeMsg('找不到房號 '+code+'，請確認房號，或請朋友先建立房間。',true)}
-            },1500);
-          });
-        }else if(st==='CHANNEL_ERROR'||st==='TIMED_OUT'){leave(true);go('home');homeMsg('連線失敗，請稍後再試。',true)}
-      });
+    attach();
     $('roomCode').textContent=code;
     homeMsg('');go('lobby');renderMp();
   }
+  /* 建立或重建頻道（切到 LINE 再回來、網路中斷時會重連，房號、身分與房主資格都保留） */
+  function attach(){
+    var m=mp;
+    if(m.ch){try{m.ch.untrack();sb.removeChannel(m.ch)}catch(e){}}
+    var ch=sb.channel('car-room-'+m.code,{config:{presence:{key:m.id},broadcast:{self:true}}});
+    m.ch=ch;
+    ch.on('presence',{event:'sync'},function(){if(mp&&mp.ch===ch)onSync()})
+      .on('broadcast',{event:'start'},function(x){if(mp&&mp.ch===ch)onStart(x.payload)})
+      .on('broadcast',{event:'prog'},function(x){if(mp&&mp.ch===ch)onProg(x.payload)})
+      .subscribe(function(st){
+        if(!mp||mp.ch!==ch)return;
+        if(st==='SUBSCRIBED'){
+          m.retry=0;
+          ch.track({name:m.name,joinedAt:m.joinedAt}).then(function(){
+            if(m.create||m.restored||m.checked)return;
+            m.checked=true;
+            setTimeout(function(){
+              if(mp===m&&m.players.length<2){leave(true);go('home');homeMsg('找不到房號 '+m.code+'，請確認房號，或請朋友先建立房間。',true)}
+            },1500);
+          });
+        }else if(st==='CHANNEL_ERROR'||st==='TIMED_OUT'||st==='CLOSED')retryLater();
+      });
+  }
+  function retryLater(){
+    var m=mp;if(!m||m.retryTimer)return;
+    m.retry++;
+    if(m.retry>6){leave(true);go('home');homeMsg('連線中斷，請重新加入房間。',true);return}
+    m.retryTimer=setTimeout(function(){m.retryTimer=0;if(mp===m)attach()},1200*m.retry);
+  }
   function leave(silent){
     if(!mp)return;
-    var m=mp;mp=null;clearInterval(m.timer);
+    var m=mp;mp=null;clearInterval(m.timer);clearTimeout(m.retryTimer);clearRoom();
     try{m.ch.untrack();sb.removeChannel(m.ch)}catch(e){}
     state='ready';
     if(!silent){go('home');loadBoard()}
   }
+  document.addEventListener('visibilitychange',function(){
+    if(!mp)return;
+    if(document.hidden){mp.hiddenAt=Date.now();return}
+    saveRoom();
+    if(Date.now()-mp.hiddenAt>3000){mp.retry=0;clearTimeout(mp.retryTimer);mp.retryTimer=0;attach()}
+  });
   function onSync(){
     var st=mp.ch.presenceState();
     mp.players=Object.keys(st).map(function(k){return{id:k,name:st[k][0].name,joinedAt:st[k][0].joinedAt}})
@@ -503,8 +532,14 @@ canvas{display:block;width:100%;height:auto}
   $('solo').onclick=soloIntro;
   $('leave').onclick=function(){leave()};
   $('startRace').onclick=startRaceMsg;
+  $('share').onclick=function(){
+    if(!mp)return;
+    var data={title:'彩虹公路小賽車',text:'一起來玩！房號 '+mp.code+'，點連結直接加入：',url:inviteLink()};
+    if(navigator.share){navigator.share(data).catch(function(){})}
+    else $('copy').click();
+  };
   $('copy').onclick=function(e){
-    if(!mp)return;var link=inviteLink(),b=e.currentTarget;
+    if(!mp)return;var link=inviteLink(),b=$('copy');
     function done(t){b.textContent=t;setTimeout(function(){b.textContent='複製邀請連結'},1800)}
     if(navigator.clipboard&&navigator.clipboard.writeText){
       navigator.clipboard.writeText(link).then(function(){done('已複製')},function(){$('phaseText').textContent='請手動複製：'+link});
@@ -513,6 +548,9 @@ canvas{display:block;width:100%;height:auto}
 
   hud();board();loadBoard();last=performance.now();requestAnimationFrame(loop);
   var qr=(new URLSearchParams(location.search).get('room')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);
+  var saved=null;
+  try{saved=JSON.parse(sessionStorage.getItem('rainbow-room')||'null')}catch(e){}
+  if(saved&&saved.code&&Date.now()-saved.t<30*60*1000&&(qr.length!==4||qr===saved.code)){connect(saved.code,saved.create,saved);return}
   if(qr.length===4){
     $('code').value=qr;$('invite').hidden=false;$('invite').textContent='朋友邀請你加入房間 '+qr+'，按「加入」就能一起玩。';
     $('create').classList.remove('primary');$('join').classList.add('primary');
