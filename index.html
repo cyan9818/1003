@@ -157,6 +157,7 @@ canvas{display:block;width:100%;height:auto}
       <div class="lvs" id="ovLv" hidden></div>
       <button class="btn primary" id="go" type="button"></button>
       <button class="btn small" id="alt" type="button"></button>
+      <button class="btn small" id="boardBtn" type="button" hidden>🏆 世界排行榜</button>
     </div>
   </div>
   <div class="pad">
@@ -255,14 +256,16 @@ canvas{display:block;width:100%;height:auto}
   function openBoard(){$('boardModal').hidden=false;loadBoard();$('closeBoard').focus()}
   function closeBoard(){$('boardModal').hidden=true}
   $('openBoard').onclick=openBoard;
+  $('boardBtn').onclick=openBoard;
   $('closeBoard').onclick=closeBoard;
   $('refreshBoard').onclick=loadBoard;
   $('boardModal').addEventListener('click',function(e){if(e.target===$('boardModal'))closeBoard()});
   document.addEventListener('keydown',function(e){if(e.key==='Escape')closeBoard()});
-  function submit(s){
-    var nm=nick();if(s<=0||!nm)return;
-    fetch(REST,{method:'POST',headers:HD,body:JSON.stringify({name:nm,score:s})}).then(function(r){
-      if(r.ok)loadBoard()}).catch(function(){});
+  function submit(s,thenOpen){
+    var nm=nick();
+    var done=function(){loadBoard().then(function(){if(thenOpen&&state==='over')$('boardModal').hidden=false})};
+    if(s<=0||!nm){if(thenOpen)done();return}
+    fetch(REST,{method:'POST',headers:HD,body:JSON.stringify({name:nm,score:s})}).then(done,done);
   }
 
   /* ---------- 遊戲核心 ---------- */
@@ -272,6 +275,7 @@ canvas{display:block;width:100%;height:auto}
     $('ovList').innerHTML=o.list||'';$('ovList').hidden=!o.list;
     $('go').hidden=!o.btn;$('go').textContent=o.btn||'';actGo=o.act||null;
     $('alt').hidden=!o.alt;$('alt').textContent=o.alt||'';actAlt=o.altAct||null;
+    $('boardBtn').hidden=!o.board;
     var lc=$('ovLv');lc.hidden=!o.lv;if(o.lv)renderLv();
     $('ov').hidden=false;
   }
@@ -304,13 +308,13 @@ canvas{display:block;width:100%;height:auto}
   function endRun(){
     var s=score();
     if(s>best){best=s;try{localStorage.setItem(bestKey(),best)}catch(e){}}
-    hud();submit(s);state='over';
+    hud();state='over';submit(s,!mp);
     if(mp){
       mp.me.done=true;mp.me.fin=finished;sendProg(true);
       show({t:finished?'完賽！':'撞車了！',p:'總分 '+s+'，等待其他玩家完成…'});
       checkAllDone();
     }else{
-      show({t:'撞車了！',p:'總分 '+s+'（'+Math.floor(dist)+' 公尺、'+coins+' 枚金幣'+(cur().x!==1?'，難度加成 ×'+cur().x:'')+'）。'+LEVELS[lv].n+'個人最佳 '+best+'。',lv:true,btn:'再玩一次',act:startSolo,alt:'回首頁',altAct:toHome});
+      show({t:'撞車了！',p:'總分 '+s+'（'+Math.floor(dist)+' 公尺、'+coins+' 枚金幣'+(cur().x!==1?'，難度加成 ×'+cur().x:'')+'）。'+LEVELS[lv].n+'個人最佳 '+best+'。',lv:true,btn:'再玩一次',act:startSolo,alt:'回首頁',altAct:toHome,board:true});
     }
   }
   function pause(){
@@ -507,7 +511,7 @@ canvas{display:block;width:100%;height:auto}
     var list=ranking();
     for(var i=0;i<list.length;i++)if(list[i].id===mp.id)mp.rank=i+1;
     show({t:mp.rank===1?'冠軍！':'第 '+mp.rank+' 名',p:'共 '+list.length+' 人，你的總分 '+score()+(isHost()?'':'。等房主再開一場。'),
-      list:rankHtml(list,false),btn:isHost()?'再來一場':'',act:startRaceMsg,alt:'回房間大廳',altAct:function(){go('lobby');renderMp()}});
+      list:rankHtml(list,false),btn:isHost()?'再來一場':'',act:startRaceMsg,alt:'回房間大廳',altAct:function(){go('lobby');renderMp()},board:true});
     renderMp();
   }
   function renderMp(){
