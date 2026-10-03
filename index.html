@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>彩虹公路小賽車</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&family=Chango&display=swap">
+<style>
+/* 版面：賽道欄（HUD、畫布、按鈕）＋ 側欄（排行榜／多人房間分頁）；窄螢幕時側欄移到賽道下方 */
+:root{
+  color-scheme:light;
+  --bg:#e9f6ff; --fg:#17324a; --muted:#5c7890; --card:#ffffff; --line:#c6dcee;
+  --accent:#ff5a3c; --accent-fg:#ffffff; --road:#4a5668; --grass:#8fd46a; --lane:#f6f1d4; --coin:#ffc928;
+  --good:#1b8a4b; --good-bg:#dff3e6;
+  --font-display:"Chango","Noto Sans TC",system-ui,sans-serif;
+  --font-body:"Noto Sans TC",system-ui,-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1c2b; --fg:#e6f1fb; --muted:#8fa9c0; --card:#182a3f; --line:#2a4260;
+  --accent:#ff7a5c; --accent-fg:#1a0d08; --road:#2b3441; --grass:#2f6b3f; --lane:#d9d3a8; --coin:#ffd34d;
+  --good:#5fd58a; --good-bg:#16382a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1c2b; --fg:#e6f1fb; --muted:#8fa9c0; --card:#182a3f; --line:#2a4260;
+  --accent:#ff7a5c; --accent-fg:#1a0d08; --road:#2b3441; --grass:#2f6b3f; --lane:#d9d3a8; --coin:#ffd34d;
+  --good:#5fd58a; --good-bg:#16382a; color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);padding-inline:16px;padding-block:12px}
+[hidden]{display:none!important}
+.app{max-width:900px;margin:0 auto;display:flex;flex-wrap:wrap;gap:16px;justify-content:center;align-items:flex-start}
+.game{flex:1 1 340px;max-width:420px;min-width:0;display:flex;flex-direction:column;gap:10px}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+h1{font-family:var(--font-display);font-size:1.35rem;margin:0;color:var(--accent);letter-spacing:.02em}
+.btn{font:inherit;font-weight:700;border:2px solid var(--fg);background:var(--card);color:var(--fg);border-radius:12px;padding:8px 14px;cursor:pointer;min-height:44px;box-shadow:0 3px 0 var(--fg)}
+.btn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--fg)}
+.btn.primary{background:var(--accent);color:var(--accent-fg)}
+.btn.small{min-height:36px;padding:4px 10px;font-size:.85rem;box-shadow:0 2px 0 var(--fg)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn:focus-visible,.tab:focus-visible{outline:3px solid var(--coin);outline-offset:2px}
+.hud{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.hud div{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 8px;min-width:0}
+.hud small{display:block;color:var(--muted);font-size:.7rem;letter-spacing:.08em}
+.hud b{font-size:1.1rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+.hbtns{display:flex;gap:6px}
+.mini{display:flex;gap:6px;overflow-x:auto;font-size:.8rem;font-weight:700}
+.mini span{white-space:nowrap;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:3px 10px}
+.mini span.me{border-color:var(--accent)}
+.stage{width:min(100%,calc((100dvh - 250px) * 360 / 560));min-width:240px;margin-inline:auto;position:relative;border:3px solid var(--fg);border-radius:16px;overflow:hidden;background:var(--grass);touch-action:none}
+canvas{display:block;width:100%;height:auto;aspect-ratio:360/560}
+.overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:20px;background:color-mix(in srgb,var(--bg) 82%,transparent)}
+.overlay h2{font-family:var(--font-display);margin:0;font-size:1.6rem;color:var(--accent)}
+.overlay h2.big{font-size:4rem}
+.overlay p{margin:0;max-width:26ch;line-height:1.6}
+.pad{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pad .btn{font-size:1.4rem;padding:14px}
+.tools{display:flex;gap:8px;flex-wrap:wrap}
+.tools .btn{flex:1 1 90px}
+aside{flex:1 1 280px;max-width:420px;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--bg);padding:4px;border-radius:12px}
+.tab{font:inherit;font-weight:700;border:0;border-radius:9px;padding:8px;min-height:40px;background:transparent;color:var(--muted);cursor:pointer}
+.tab[aria-pressed="true"]{background:var(--card);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.nick,.codebar{display:flex;gap:8px;align-items:center}
+.nick label,.codebar label{font-size:.8rem;color:var(--muted);white-space:nowrap}
+.field{flex:1;min-width:0;font:inherit;padding:8px 10px;border:2px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg);min-height:44px}
+.field:focus-visible{outline:3px solid var(--coin);outline-offset:1px}
+#code{text-transform:uppercase;letter-spacing:.2em;text-align:center;font-weight:700}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.status{font-size:.8rem;color:var(--muted);margin:0;line-height:1.5}
+.status.err{color:var(--accent)}
+ol,ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+li{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:var(--bg)}
+li.me{outline:2px solid var(--accent)}
+li .nm{min-width:0;overflow-wrap:anywhere}
+li .sc{font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
+.room-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.room-code{font-family:var(--font-display);font-size:2rem;letter-spacing:.15em;color:var(--accent);line-height:1}
+.badge{display:inline-block;font-size:.7rem;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--accent);color:var(--accent-fg);margin-left:6px;vertical-align:middle}
+.badge.you{background:var(--good-bg);color:var(--good)}
+.prog{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:4px}
+.prog i{display:block;height:100%;background:var(--good);width:0}
+.rl{flex:1;min-width:0}
+.note{color:var(--muted);font-size:.8rem;line-height:1.6;margin:0}
+@media (max-width:520px){
+  body{padding-inline:12px;padding-block:8px}
+  .game{gap:8px}
+  h1{font-size:1.1rem}
+  .hud{gap:6px}.hud div{padding:4px 6px}.hud b{font-size:1rem}
+  .pad .btn{padding:10px;font-size:1.25rem;min-height:56px}
+  .overlay h2.big{font-size:3rem}
+}
+@media (prefers-reduced-motion:reduce){.btn{transition:none}}
+</style>
+</head>
+<body>
+<main class="app">
+  <section class="game">
+    <header>
+      <h1>彩虹公路小賽車</h1>
+      <div class="hbtns">
+        <button class="btn small" id="pause" type="button">暫停</button>
+        <button class="btn small" id="restart" type="button">重玩</button>
+        <button class="btn small" id="theme" type="button" aria-label="切換深色或淺色模式">🌓</button>
+      </div>
+    </header>
+    <div class="mini" id="mini" hidden></div>
+    <div class="hud" aria-live="polite">
+      <div><small>距離</small><b id="dist">0 m</b></div>
+      <div><small>金幣</small><b id="coins">0</b></div>
+      <div><small>生命</small><b id="lives">♥♥♥</b></div>
+      <div><small>最高分</small><b id="best">0</b></div>
+    </div>
+    <div class="stage" id="stage">
+      <canvas id="cv" width="360" height="560"></canvas>
+      <div class="overlay" id="ov">
+        <h2 id="ovT">準備出發</h2>
+        <p id="ovP">左右移動換車道，閃開車輛與路障，吃金幣加分。</p>
+        <button class="btn primary" id="go" type="button">開始遊戲</button>
+        <button class="btn small" id="ovCopy" type="button" hidden>複製邀請連結</button>
+      </div>
+    </div>
+    <div class="pad">
+      <button class="btn" id="L" type="button" aria-label="向左換道">◀ 左</button>
+      <button class="btn" id="R" type="button" aria-label="向右換道">右 ▶</button>
+    </div>
+  </section>
+
+  <aside>
+    <div class="tabs" role="group" aria-label="側欄分頁">
+      <button class="tab" id="tabBoard" type="button" aria-pressed="true">排行榜</button>
+      <button class="tab" id="tabMp" type="button" aria-pressed="false">多人房間</button>
+    </div>
+    <div class="nick"><label for="nick">暱稱</label><input class="field" id="nick" maxlength="12" placeholder="最多 12 字" autocomplete="nickname"></div>
+
+    <section id="paneBoard" style="display:flex;flex-direction:column;gap:10px">
+      <p class="status" id="status">連線中…</p>
+      <ol id="board"></ol>
+      <button class="btn" id="refresh" type="button">重新整理排行榜</button>
+    </section>
+
+    <section id="paneMp" hidden style="display:flex;flex-direction:column;gap:10px">
+      <div id="mpJoin" style="display:flex;flex-direction:column;gap:10px">
+        <button class="btn primary" id="create" type="button">建立房間</button>
+        <div class="codebar">
+          <label for="code">房號</label>
+          <input class="field" id="code" maxlength="4" placeholder="ABCD" autocomplete="off" autocapitalize="characters">
+          <button class="btn" id="join" type="button">加入</button>
+        </div>
+      </div>
+      <p class="status" id="mpMsg">建立房間後，把房號或邀請連結傳給朋友，手機、平板、電腦都能加入。</p>
+      <div id="mpRoom" hidden style="display:flex;flex-direction:column;gap:10px">
+        <div class="room-head">
+          <div><small class="status">房號</small><div class="room-code" id="roomCode">----</div></div>
+          <button class="btn small" id="copy" type="button">複製邀請連結</button>
+        </div>
+        <p class="status" id="phaseText"></p>
+        <ul id="plist"></ul>
+        <button class="btn primary" id="startRace" type="button">開始比賽</button>
+        <button class="btn small" id="leave" type="button">離開房間</button>
+      </div>
+    </section>
+
+    <p class="note">操作：鍵盤 ← → 或 A D；手機點下方按鈕，或在賽道上左右滑動。多人比賽跑到 1500 公尺或 3 條命用完即結束，總分最高者獲勝。遊戲結束時分數會用暱稱上傳全體排行榜；連不上時顯示示範資料。</p>
+  </aside>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+(function(){
+  var W=360,H=560,LANES=3,LW=W/LANES,GOAL=1500;
+  var cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+  var $=function(i){return document.getElementById(i)};
+  var cs=getComputedStyle(document.documentElement);
+  function tok(n){return cs.getPropertyValue(n).trim()}
+  function esc(t){return String(t).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+
+  var SB_URL='https://vkpzblltqznkvgfnjcdp.supabase.co';
+  var KEY='sb_publishable_N6kWoe_b_ego0YqWMAPVtg_jNzcB96D';
+  var HD={apikey:KEY,Authorization:'Bearer '+KEY,'Content-Type':'application/json'};
+  var sb=null;
+  try{if(window.supabase)sb=window.supabase.createClient(SB_URL,KEY,{realtime:{params:{eventsPerSecond:10}}})}catch(e){}
+
+  var state='ready',lane=1,px=LW*1.5,speed=0,dist=0,wd=0,nextAt=0,coins=0,lives=3,inv=0,items=[],scroll=0,last=0,best=0,shake=0,finished=false;
+  var rnd=Math.random;
+  try{best=parseInt(localStorage.getItem('rainbow-best'))||0}catch(e){}
+  var demo=[['小橘',3820],['阿豪',3140],['Mia',2680],['大雄',2210],['小海',1760],['路過的鴨',1200]];
+  var carColors=['#3b82f6','#a855f7','#10b981','#f97316','#ec4899'];
+  function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+  function laneX(l){return LW*l+LW/2}
+  function score(){return Math.floor(dist/10)+coins*20}
+  function hud(){
+    $('dist').textContent=Math.floor(dist)+' m';$('coins').textContent=coins;
+    $('lives').textContent='♥'.repeat(lives)+'♡'.repeat(3-lives);
+    $('best').textContent=Math.max(best,score());
+  }
+
+  /* ---------- 全體排行榜 ---------- */
+  var SB_REST=SB_URL+'/rest/v1/car_scores',rows=null;
+  try{$('nick').value=localStorage.getItem('rainbow-nick')||''}catch(e){}
+  function nick(){return $('nick').value.trim().slice(0,12)}
+  function board(){
+    var list=rows?rows.map(function(r){return{n:r.name,s:r.score}}):demo.map(function(d){return{n:d[0],s:d[1]}});
+    if(!rows&&best>0){list.push({n:'你',s:best,me:true});list.sort(function(a,b){return b.s-a.s})}
+    var nm=nick();
+    $('board').innerHTML=list.slice(0,10).map(function(r,i){
+      var me=r.me||(rows&&nm&&r.n===nm);
+      return '<li class="'+(me?'me':'')+'"><span class="nm">'+(i+1)+'. '+esc(r.n)+'</span><span class="sc">'+r.s+'</span></li>'}).join('');
+  }
+  function load(){
+    $('status').textContent='連線中…';
+    return fetch(SB_REST+'?select=name,score&order=score.desc&limit=10',{headers:HD}).then(function(r){
+      if(!r.ok)throw 0;return r.json()}).then(function(j){
+      rows=j;$('status').textContent=j.length?'已連線，顯示全體玩家前 10 名':'已連線，還沒有人上榜，成為第一名吧';board()
+    }).catch(function(){rows=null;$('status').textContent='無法連線，顯示示範資料';board()});
+  }
+  function submit(s){
+    var nm=nick();
+    if(s<=0)return;
+    if(!nm){$('status').textContent='輸入暱稱後，下次結束遊戲就會上傳分數';return}
+    try{localStorage.setItem('rainbow-nick',nm)}catch(e){}
+    fetch(SB_REST,{method:'POST',headers:HD,body:JSON.stringify({name:nm,score:s})}).then(function(r){
+      if(!r.ok)throw 0;return load()}).catch(function(){$('status').textContent='分數上傳失敗，請稍後再試'});
+  }
+
+  /* ---------- 遊戲核心 ---------- */
+  function show(t,p,b,big){
+    var h=$('ovT');h.textContent=t;h.className=big?'big':'';
+    $('ovP').textContent=p;$('ovP').hidden=!p;
+    $('go').hidden=!b;if(b)$('go').textContent=b;
+    $('ov').hidden=false;$('ovCopy').hidden=!(mp&&mp.phase==='lobby');
+  }
+  function reset(seed){
+    rnd=seed==null?Math.random:mulberry(seed);
+    lane=1;px=laneX(1);speed=180;dist=0;wd=0;nextAt=300;coins=0;lives=3;inv=0;items=[];finished=false;hud();
+  }
+  function start(){
+    if(mp)return;
+    reset();state='play';$('ov').hidden=true;$('pause').textContent='暫停';last=performance.now();
+  }
+  function endRun(){
+    var s=score();
+    if(s>best){best=s;try{localStorage.setItem('rainbow-best',best)}catch(e){}}
+    hud();board();submit(s);
+    if(mp){
+      state='over';mp.me.done=true;mp.me.fin=finished;sendProg(true);
+      show(finished?'完賽！':'撞車了！','總分 '+s+'，等待其他玩家完成…','');
+      checkAllDone();
+    }else{
+      state='over';
+      show('撞車了！','總分 '+s+'（'+Math.floor(dist)+' 公尺、'+coins+' 枚金幣）','再來一次');
+    }
+  }
+  function pause(){
+    if(mp)return;
+    if(state==='play'){state='pause';$('pause').textContent='繼續';show('暫停中','休息一下，準備好再繼續。','繼續')}
+    else if(state==='pause'){state='play';$('pause').textContent='暫停';$('ov').hidden=true;last=performance.now()}
+  }
+  function move(d){if(state!=='play')return;lane=Math.max(0,Math.min(LANES-1,lane+d))}
+
+  function addItem(){
+    var l=Math.floor(rnd()*LANES),r=rnd(),t=r<.4?'coin':(r<.75?'car':'cone');
+    var c=carColors[Math.floor(rnd()*carColors.length)],extra=rnd()<.5;
+    items.push({t:t,l:l,y:-60,c:c,v:t==='car'?.45:0});
+    if(t==='coin'&&extra){items.push({t:'coin',l:l,y:-120,c:0,v:0});items.push({t:'coin',l:l,y:-180,c:0,v:0})}
+  }
+  function update(dt){
+    speed=Math.min(520,180+Math.floor(dist/500)*35+dist*.02);
+    dist+=speed*dt/10; wd+=speed*dt; scroll=(scroll+speed*dt)%80;
+    px+=(laneX(lane)-px)*Math.min(1,dt*14);
+    if(wd>=nextAt){addItem();nextAt=wd+Math.max(.35,.9-speed/900)*speed*(.8+rnd()*.5)}
+    if(inv>0)inv-=dt; if(shake>0)shake-=dt;
+    var py=H-110;
+    items.forEach(function(it){
+      it.y+=(speed*(1-it.v))*dt;
+      if(it.dead)return;
+      if(Math.abs(laneX(it.l)-px)<34&&Math.abs(it.y-py)<(it.t==='coin'?34:46)){
+        if(it.t==='coin'){coins++;it.dead=true}
+        else if(inv<=0){lives--;inv=1.4;shake=.3;it.dead=true}
+      }
+    });
+    items=items.filter(function(it){return !it.dead&&it.y<H+80});
+    hud();
+    if(lives<=0){endRun();return}
+    if(mp&&dist>=GOAL){finished=true;endRun()}
+  }
+  function rr(x,y,w,h,r){ctx.beginPath();ctx.roundRect?ctx.roundRect(x,y,w,h,r):ctx.rect(x,y,w,h)}
+  function car(x,y,c,flip){
+    ctx.fillStyle='rgba(0,0,0,.25)';rr(x-26,y-40,56,86,12);ctx.fill();
+    ctx.fillStyle=c;rr(x-28,y-44,56,86,12);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.85)';rr(x-20,y-(flip?22:30),40,22,6);ctx.fill();
+    ctx.fillStyle='#17324a';ctx.fillRect(x-33,y-30,6,18);ctx.fillRect(x+27,y-30,6,18);ctx.fillRect(x-33,y+14,6,18);ctx.fillRect(x+27,y+14,6,18);
+    ctx.fillStyle='#ffe27a';ctx.fillRect(x-22,y-(flip?-34:44),10,6);ctx.fillRect(x+12,y-(flip?-34:44),10,6);
+  }
+  function draw(){
+    ctx.save();
+    if(shake>0)ctx.translate((Math.random()-.5)*8,(Math.random()-.5)*8);
+    ctx.fillStyle=tok('--grass');ctx.fillRect(0,0,W,H);
+    ctx.fillStyle=tok('--road');ctx.fillRect(6,0,W-12,H);
+    ctx.fillStyle=tok('--lane');
+    for(var i=1;i<LANES;i++)for(var y=-80;y<H;y+=80)ctx.fillRect(LW*i-3,y+scroll,6,40);
+    items.forEach(function(it){
+      var x=laneX(it.l);
+      if(it.t==='coin'){
+        ctx.fillStyle=tok('--coin');ctx.beginPath();ctx.arc(x,it.y,15,0,7);ctx.fill();
+        ctx.strokeStyle='#b8860b';ctx.lineWidth=3;ctx.stroke();
+        ctx.fillStyle='#b8860b';ctx.font='bold 16px sans-serif';ctx.textAlign='center';ctx.fillText('$',x,it.y+6);
+      }else if(it.t==='cone'){
+        ctx.fillStyle='#ff7a1a';ctx.beginPath();ctx.moveTo(x,it.y-28);ctx.lineTo(x+22,it.y+22);ctx.lineTo(x-22,it.y+22);ctx.fill();
+        ctx.fillStyle='#fff';ctx.fillRect(x-12,it.y,24,8);
+      }else car(x,it.y,it.c,true);
+    });
+    if(mp&&(state==='play'||state==='over')){
+      if(GOAL-dist<60&&GOAL-dist>0){ctx.fillStyle='#fff';ctx.fillRect(6,40,W-12,10);ctx.fillStyle='#17324a';for(var k=0;k<12;k++)if(k%2)ctx.fillRect(6+k*(W-12)/12,40,(W-12)/12,10)}
+    }
+    if(inv<=0||Math.floor(inv*12)%2===0)car(px,H-110,tok('--accent'),false);
+    ctx.restore();
+  }
+  function loop(t){
+    var dt=Math.min(.05,(t-last)/1000);last=t;
+    if(state==='play'){
+      update(dt);
+      if(mp&&state==='play'&&t-mp.lastSend>300){mp.lastSend=t;sendProg(false)}
+    }
+    draw();requestAnimationFrame(loop);
+  }
+
+  /* ---------- 多人房間（Supabase Realtime） ---------- */
+  var mp=null,CODE_CHARS='ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  function mpMsg(t,err){var e=$('mpMsg');e.textContent=t;e.className='status'+(err?' err':'')}
+  function genCode(){var s='';for(var i=0;i<4;i++)s+=CODE_CHARS[Math.floor(Math.random()*CODE_CHARS.length)];return s}
+  function connect(code,create){
+    var nm=nick();
+    if(!nm){mpMsg('請先在上方輸入暱稱。',true);$('nick').focus();return}
+    if(!sb){mpMsg('無法載入連線元件，請檢查網路後重新整理頁面。',true);return}
+    try{localStorage.setItem('rainbow-nick',nm)}catch(e){}
+    leave(true);
+    var id=Math.random().toString(36).slice(2,10);
+    var ch=sb.channel('car-room-'+code,{config:{presence:{key:id},broadcast:{self:true}}});
+    mp={ch:ch,id:id,code:code,name:nm,joinedAt:Date.now(),players:[],prog:{},expected:[],phase:'lobby',create:create,lastSend:0,me:{done:false,fin:false},timer:null,rank:0};
+    mpMsg('連線中…');
+    ch.on('presence',{event:'sync'},function(){if(mp&&mp.ch===ch)onSync()})
+      .on('broadcast',{event:'start'},function(m){if(mp&&mp.ch===ch)onStart(m.payload)})
+      .on('broadcast',{event:'prog'},function(m){if(mp&&mp.ch===ch)onProg(m.payload)})
+      .subscribe(function(st){
+        if(!mp||mp.ch!==ch)return;
+        if(st==='SUBSCRIBED'){
+          ch.track({name:nm,joinedAt:mp.joinedAt}).then(function(){
+            setTimeout(function(){
+              if(mp&&mp.ch===ch&&!mp.create&&mp.players.length<2){leave();mpMsg('找不到房號 '+code+'，請確認房號或請朋友先建立房間。',true)}
+              else if(mp&&mp.ch===ch)mpMsg('')
+            },1500);
+          });
+        }else if(st==='CHANNEL_ERROR'||st==='TIMED_OUT'){leave();mpMsg('連線失敗，請稍後再試。',true)}
+      });
+    window.scrollTo(0,0);$('mpJoin').hidden=true;$('mpRoom').hidden=false;$('roomCode').textContent=code;$('pause').hidden=true;$('restart').hidden=true;$('mini').hidden=false;
+    renderMp();
+  }
+  function leave(silent){
+    if(!mp)return;
+    var m=mp;mp=null;
+    clearInterval(m.timer);
+    try{m.ch.untrack();sb.removeChannel(m.ch)}catch(e){}
+    state='ready';reset();
+    $('mpJoin').hidden=false;$('mpRoom').hidden=true;$('pause').hidden=false;$('restart').hidden=false;$('mini').hidden=true;
+    show('準備出發','左右移動換車道，閃開車輛與路障，吃金幣加分。','開始遊戲');
+    if(!silent)mpMsg('已離開房間。');
+  }
+  function onSync(){
+    var st=mp.ch.presenceState();
+    mp.players=Object.keys(st).map(function(k){return{id:k,name:st[k][0].name,joinedAt:st[k][0].joinedAt}})
+      .sort(function(a,b){return a.joinedAt-b.joinedAt||(a.id<b.id?-1:1)});
+    renderMp();
+    if(mp.phase==='race')checkAllDone();
+  }
+  function isHost(){return !!mp&&mp.players.length>0&&mp.players[0].id===mp.id}
+  function onStart(p){
+    mp.phase='race';mp.prog={};mp.rank=0;mp.me={done:false,fin:false};
+    mp.expected=mp.players.map(function(x){return x.id});
+    if(mp.expected.indexOf(mp.id)<0)mp.expected.push(mp.id);
+    reset(p.seed);state='count';window.scrollTo(0,0);
+    var n=3;show('準備','',false);
+    $('ovT').textContent=n;$('ovT').className='big';
+    renderMp();
+    clearInterval(mp.timer);
+    var m=mp;
+    m.timer=setInterval(function(){
+      n--;
+      if(n>0){$('ovT').textContent=n}
+      else{clearInterval(m.timer);$('ovT').textContent='出發！';
+        setTimeout(function(){if(mp===m&&state==='count'){state='play';$('ov').hidden=true;last=performance.now();m.lastSend=0}},350)}
+    },1000);
+  }
+  function sendProg(done){
+    var p={id:mp.id,name:mp.name,dist:Math.floor(dist),score:score(),lives:lives,done:!!done,fin:finished};
+    mp.prog[mp.id]=p;
+    mp.ch.send({type:'broadcast',event:'prog',payload:p});
+    renderMp();
+  }
+  function onProg(p){
+    if(!p||!p.id)return;
+    mp.prog[p.id]=p;renderMp();checkAllDone();
+  }
+  function checkAllDone(){
+    if(!mp||mp.phase!=='race'||!mp.me.done)return;
+    var present=mp.players.map(function(x){return x.id});
+    var wait=mp.expected.filter(function(id){return present.indexOf(id)>-1&&!(mp.prog[id]&&mp.prog[id].done)});
+    if(wait.length)return;
+    mp.phase='results';
+    var list=ranking();
+    for(var i=0;i<list.length;i++)if(list[i].id===mp.id)mp.rank=i+1;
+    show(mp.rank===1?'冠軍！':'比賽結束','你拿下第 '+mp.rank+' 名（共 '+list.length+' 人），總分 '+score()+(isHost()?'':'。等房主再開一場。'),isHost()?'再來一場':'');
+    renderMp();
+  }
+  function ranking(){
+    var present=mp.players.map(function(x){return x.id});
+    return mp.expected.filter(function(id){return mp.prog[id]&&(present.indexOf(id)>-1||mp.prog[id].done)})
+      .map(function(id){return mp.prog[id]}).sort(function(a,b){return b.score-a.score});
+  }
+  function renderMp(){
+    if(!mp)return;
+    var host=isHost(),ph=mp.phase,html='';
+    if(ph==='lobby'){
+      $('phaseText').textContent=host?'你是房主。人到齊後按「開始比賽」。':'等待房主開始比賽…';
+      show('房間 '+mp.code,'目前 '+mp.players.length+' 人：'+mp.players.map(function(x){return x.name}).join('、')+'。'+(host?'人到齊就開始！':'等待房主開始…'),host?'開始比賽':'');
+      html=mp.players.map(function(p){
+        return '<li class="'+(p.id===mp.id?'me':'')+'"><span class="nm">'+esc(p.name)+(p.id===mp.players[0].id?'<span class="badge">房主</span>':'')+(p.id===mp.id?'<span class="badge you">你</span>':'')+'</span></li>'}).join('');
+    }else{
+      $('phaseText').textContent=ph==='race'?'比賽進行中，即時名次：':'比賽結束，最終名次：';
+      var list=ranking();
+      html=list.map(function(p,i){
+        var pct=Math.min(100,p.dist/GOAL*100);
+        var tag=p.done?(p.fin?'完賽':'出局'):'';
+        return '<li class="'+(p.id===mp.id?'me':'')+'"><div class="rl"><span class="nm">'+(i+1)+'. '+esc(p.name)+(tag?'<span class="badge you">'+tag+'</span>':'')+'</span><div class="prog"><i style="width:'+pct+'%"></i></div></div><span class="sc">'+p.score+'</span></li>'}).join('');
+    }
+    $('plist').innerHTML=html;
+    var mr=ph==='lobby'?[]:ranking();
+    $('mini').innerHTML=mr.slice(0,4).map(function(p,i){return '<span class="'+(p.id===mp.id?'me':'')+'">'+(i+1)+'. '+esc(p.name)+' '+p.score+'</span>'}).join('')||'<span>等待開始</span>';
+    var b=$('startRace');
+    b.hidden=!(ph==='lobby'||ph==='results');
+    b.disabled=!host;
+    b.textContent=host?(ph==='results'?'再來一場':'開始比賽'):'等待房主開始';
+  }
+  function inviteLink(){return location.origin+location.pathname+'?room='+mp.code}
+
+  /* ---------- 事件 ---------- */
+  $('go').onclick=function(){if(mp){startRaceMsg();return}state==='pause'?pause():start()};
+  $('restart').onclick=start;
+  $('pause').onclick=pause;
+  $('L').onclick=function(){move(-1)};
+  $('R').onclick=function(){move(1)};
+  document.addEventListener('keydown',function(e){
+    if(/INPUT|TEXTAREA/.test(e.target.tagName))return;
+    var k=e.key;
+    if(k==='ArrowLeft'||k==='a'||k==='A'){move(-1);e.preventDefault()}
+    else if(k==='ArrowRight'||k==='d'||k==='D'){move(1);e.preventDefault()}
+    else if(k===' '&&!mp){if(state==='ready'||state==='over')start();else pause();e.preventDefault()}
+  });
+  var sx=null;
+  $('stage').addEventListener('pointerdown',function(e){sx=e.clientX});
+  $('stage').addEventListener('pointerup',function(e){
+    if(sx===null)return;var d=e.clientX-sx;sx=null;
+    if(Math.abs(d)>25)move(d>0?1:-1);
+  });
+  $('theme').onclick=function(){
+    var r=document.documentElement,dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme:dark)').matches;
+    r.dataset.theme=dark?'light':'dark';
+  };
+  function tab(mpOn){
+    $('paneBoard').hidden=mpOn;$('paneMp').hidden=!mpOn;
+    $('paneBoard').style.display=mpOn?'none':'flex';$('paneMp').style.display=mpOn?'flex':'none';
+    $('tabBoard').setAttribute('aria-pressed',!mpOn);$('tabMp').setAttribute('aria-pressed',mpOn);
+  }
+  $('tabBoard').onclick=function(){tab(false)};
+  $('tabMp').onclick=function(){tab(true)};
+  $('refresh').onclick=load;
+  $('nick').addEventListener('change',board);
+  $('create').onclick=function(){connect(genCode(),true)};
+  $('join').onclick=function(){
+    var c=$('code').value.trim().toUpperCase();
+    if(c.length!==4){mpMsg('房號是 4 個英數字。',true);return}
+    connect(c,false);
+  };
+  $('code').addEventListener('keydown',function(e){if(e.key==='Enter')$('join').click()});
+  $('leave').onclick=function(){leave()};
+  function startRaceMsg(){
+    if(!mp||!isHost()||mp.phase==='race')return;
+    mp.ch.send({type:'broadcast',event:'start',payload:{seed:Math.floor(Math.random()*2147483647)}});
+  }
+  $('startRace').onclick=startRaceMsg;
+  function copyLink(e){
+    if(!mp)return;var link=inviteLink(),b=e.currentTarget;
+    function done(t){b.textContent=t;setTimeout(function(){b.textContent='複製邀請連結'},1800)}
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(link).then(function(){done('已複製')},function(){mpMsg('請手動複製：'+link)});
+    }else mpMsg('請手動複製：'+link);
+  }
+  $('copy').onclick=copyLink;$('ovCopy').onclick=copyLink;
+
+  reset();board();hud();load();last=performance.now();requestAnimationFrame(loop);
+  var qr=(new URLSearchParams(location.search).get('room')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);
+  if(qr.length===4){tab(true);$('code').value=qr;mpMsg('已帶入房號 '+qr+'，輸入暱稱後按「加入」。')}
+})();
+</script>
+</body>
+</html>
